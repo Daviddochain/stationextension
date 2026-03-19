@@ -1,0 +1,14 @@
+@import "./styles/theme";
+@import "./styles/fonts";
+@import "./styles/reboot";
+@import "./styles/utils";
+@import "./styles/customize";
+
+#station {
+  min-width: 400px;
+  min-height: 600px;
+  height: 100vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background-color: var(--bg);
+}

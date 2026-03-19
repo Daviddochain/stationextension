@@ -1,4 +1,4 @@
-import { Vote } from "@terraclassic-community/feather.js"
+import { Vote } from "@terra-money/feather.js"
 
 export interface TerraProposalItem {
   voter: string

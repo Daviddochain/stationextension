@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { LegacyAminoMultisigPublicKey } from "@terraclassic-community/feather.js"
+import { LegacyAminoMultisigPublicKey } from "@terra-money/feather.js"
 import { useChainID } from "data/wallet"
 import { useAccountInfo } from "data/queries/auth"
 import { Card, Grid, Page } from "components/layout"

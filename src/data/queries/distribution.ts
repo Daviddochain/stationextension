@@ -7,7 +7,7 @@ import {
   Rewards,
   ValAddress,
   Validator,
-} from "@terraclassic-community/feather.js"
+} from "@terra-money/feather.js"
 import { has } from "utils/num"
 import { sortCoins } from "utils/coin"
 import { queryKey, RefetchOptions } from "../query"

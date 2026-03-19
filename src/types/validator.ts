@@ -1,4 +1,4 @@
-import { Validator } from "@terraclassic-community/feather.js"
+import { Validator } from "@terra-money/feather.js"
 import { Contacts } from "./components"
 
 export interface TerraValidator extends Validator.Data {

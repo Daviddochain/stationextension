@@ -7,7 +7,7 @@ import styles from "./SignBytesDetails.module.scss"
 import { isJSON } from "utils/json"
 import { capitalize } from "@mui/material"
 import { FinderLink } from "components/general"
-import { AccAddress } from "@terraclassic-community/feather.js"
+import { AccAddress } from "@terra-money/feather.js"
 
 const SignBytesDetails = ({ origin, timestamp, bytes }: SignBytesRequest) => {
   const { t } = useTranslation()

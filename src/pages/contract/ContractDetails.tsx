@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { ContractInfo } from "@terraclassic-community/feather.js"
+import { ContractInfo } from "@terra-money/feather.js"
 import { Pre, FinderLink } from "components/general"
 import { Grid } from "components/layout"
 import styles from "./ContractDetails.module.scss"

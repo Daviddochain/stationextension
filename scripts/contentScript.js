@@ -477,3 +477,4 @@ function openPopup() {
 function closePopup() {
   browser.runtime.sendMessage("CLOSE_POPUP")
 }
+

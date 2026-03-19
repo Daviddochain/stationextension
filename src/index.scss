@@ -1,12 +1,12 @@
-@import "theme";
-@import "fonts";
-@import "reboot";
-@import "utils";
-@import "customize";
+@import "./styles/theme";
+@import "./styles/fonts";
+@import "./styles/reboot";
+@import "./styles/utils";
+@import "./styles/customize";
 
 #station {
   min-width: 400px;
-  min-height: 600px; // Chrome extension maximum height
+  min-height: 600px;
   height: 100vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;

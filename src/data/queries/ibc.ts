@@ -5,7 +5,7 @@ import { useInterchainLCDClient } from "./lcdClient"
 import { useNetwork } from "data/wallet"
 import axios from "axios"
 import crypto from "crypto"
-import { AccAddress } from "@terraclassic-community/feather.js"
+import { AccAddress } from "@terra-money/feather.js"
 
 export const useIBCBaseDenom = (
   denom: Denom,

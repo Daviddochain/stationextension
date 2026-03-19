@@ -2,10 +2,10 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useFieldArray, useForm } from "react-hook-form"
 import { useSetRecoilState } from "recoil"
-import { AccAddress, isTxError } from "@terraclassic-community/feather.js"
-import { LegacyAminoMultisigPublicKey } from "@terraclassic-community/feather.js"
-import { SimplePublicKey } from "@terraclassic-community/feather.js"
-import { SignatureV2, MultiSignature } from "@terraclassic-community/feather.js"
+import { AccAddress, isTxError } from "@terra-money/feather.js"
+import { LegacyAminoMultisigPublicKey } from "@terra-money/feather.js"
+import { SimplePublicKey } from "@terra-money/feather.js"
+import { SignatureV2, MultiSignature } from "@terra-money/feather.js"
 import { SAMPLE_ADDRESS } from "config/constants"
 import { useInterchainLCDClient } from "data/queries/lcdClient"
 import { latestTxState } from "data/queries/tx"
@@ -97,7 +97,10 @@ const PostMultisigTxForm = ({ publicKey, sequence, ...props }: Props) => {
       <Form onSubmit={handleSubmit(submit)}>
         <FormItem label={t("Multisig address")}>
           <Input
-            {...register("address", { validate: AccAddress.validate })}
+            {...register("address", {
+              validate: (value) =>
+                AccAddress.validate(value) || "Invalid address",
+            })}
             placeholder={SAMPLE_ADDRESS}
           />
         </FormItem>

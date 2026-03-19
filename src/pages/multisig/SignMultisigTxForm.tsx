@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useForm } from "react-hook-form"
-import { AccAddress, SignatureV2 } from "@terraclassic-community/feather.js"
+import { AccAddress, SignatureV2 } from "@terra-money/feather.js"
 import { SAMPLE_ADDRESS } from "config/constants"
 import { useInterchainLCDClient } from "data/queries/lcdClient"
 import { Pre } from "components/general"
@@ -74,7 +74,10 @@ const SignMultisigTxForm = ({ defaultValues }: Props) => {
       <Form onSubmit={handleSubmit(submit)}>
         <FormItem label={t("Multisig address")}>
           <Input
-            {...register("address", { validate: AccAddress.validate })}
+            {...register("address", {
+              validate: (value) =>
+                AccAddress.validate(value) || "Invalid address",
+            })}
             placeholder={SAMPLE_ADDRESS}
             autoFocus
           />

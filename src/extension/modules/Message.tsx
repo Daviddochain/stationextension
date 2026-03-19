@@ -1,8 +1,8 @@
 import { useState } from "react"
 import classNames from "classnames/bind"
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown"
-import { Coins, Msg, MsgAminoCustom } from "@terraclassic-community/feather.js"
-import { readMsg } from "@terraclassic-community/msg-reader"
+import { Coins, Msg, MsgAminoCustom } from "@terra-money/feather.js"
+import { readMsg } from "@terra-money/msg-reader"
 import TxMessage from "app/containers/TxMessage"
 import styles from "./Message.module.scss"
 

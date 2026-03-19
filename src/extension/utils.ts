@@ -5,7 +5,7 @@ import {
   Msg,
   SignatureV2,
   Tx,
-} from "@terraclassic-community/feather.js"
+} from "@terra-money/feather.js"
 import { useChainID, useNetwork } from "data/wallet"
 import { isNil } from "ramda"
 import browser from "webextension-polyfill"

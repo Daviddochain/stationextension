@@ -1,4 +1,4 @@
-@import "mixins";
+@import "../../styles/mixins";
 
 .wallet {
   @include flex(space-between);

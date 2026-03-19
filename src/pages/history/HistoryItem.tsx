@@ -14,8 +14,8 @@ import {
   createActionRuleSet,
   createLogMatcherForActions,
   getTxCanonicalMsgs,
-} from "@terraclassic-community/log-finder-ruleset"
-import { TxInfo } from "@terraclassic-community/feather.js"
+} from "@terra-money/log-finder-ruleset"
+import { TxInfo } from "@terra-money/feather.js"
 
 const HistoryItem = ({
   txhash,

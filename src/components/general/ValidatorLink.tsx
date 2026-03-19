@@ -1,4 +1,4 @@
-import { ValAddress } from "@terraclassic-community/feather.js"
+import { ValAddress } from "@terra-money/feather.js"
 import { useValidator } from "data/queries/staking"
 import { FinderLink } from "../general"
 import { InternalLink } from "./Internal"

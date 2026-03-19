@@ -1,5 +1,5 @@
 import { readAmount, toAmount } from "@terra-money/terra-utils"
-import { Coin, Coins } from "@terraclassic-community/feather.js"
+import { Coin, Coins } from "@terra-money/feather.js"
 import { getShouldTax } from "data/queries/treasury"
 import { FindDecimals } from "./IBCHelperContext"
 import { calcMinimumTaxAmount } from "./Tx"
@@ -16,7 +16,7 @@ axios.interceptors.response.use(
 export const getPlaceholder = (decimals = 6) => "0.".padEnd(decimals + 2, "0")
 
 export const toInput = (amount: BigNumber.Value, decimals = 6) =>
-  new BigNumber(readAmount(amount, { decimals })).toNumber()
+  new BigNumber(readAmount(String(amount), { decimals })).toNumber()
 
 /* field array (coins) */
 export interface CoinInput {

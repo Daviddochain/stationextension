@@ -1,4 +1,4 @@
-import { SeedKey } from "@terraclassic-community/feather.js"
+import { SeedKey } from "@terra-money/feather.js"
 import useAuth from "auth/hooks/useAuth"
 import { getDecryptedKey, updateStoredWallet } from "auth/scripts/keystore"
 import {

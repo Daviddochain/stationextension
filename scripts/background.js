@@ -311,3 +311,4 @@ browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "keep-alive-alarm") {
   }
 })
+

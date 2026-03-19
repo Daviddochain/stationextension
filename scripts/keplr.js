@@ -1,4 +1,4 @@
-import Station from "@terraclassic-community/station-connector"
+import Station from "@terra-money/station-connector"
 
 function injectKeplr() {
   window.terraClassicStation = new Station()
@@ -26,3 +26,4 @@ if (!document.readyState === "complete") {
     }
   )
 }
+

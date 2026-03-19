@@ -3,7 +3,7 @@ import { readPercent } from "@terra-money/terra-utils"
 import { Card } from "components/layout"
 import { ToNow } from "components/display"
 import ValidatorNumbers from "./components/ValidatorNumbers"
-import { Validator } from "@terraclassic-community/feather.js"
+import { Validator } from "@terra-money/feather.js"
 
 const ValidatorCommission = ({ validator }: { validator: Validator }) => {
   const { t } = useTranslation()

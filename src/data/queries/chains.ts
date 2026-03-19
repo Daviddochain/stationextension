@@ -1,4 +1,4 @@
-import { AccAddress } from "@terraclassic-community/feather.js"
+import { AccAddress } from "@terra-money/feather.js"
 import { useNetwork } from "data/wallet"
 import { InterchainNetwork } from "types/network"
 import createContext from "utils/createContext"

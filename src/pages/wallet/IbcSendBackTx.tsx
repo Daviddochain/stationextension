@@ -1,8 +1,4 @@
-import {
-  AccAddress,
-  Coin,
-  MsgTransfer,
-} from "@terraclassic-community/feather.js"
+import { AccAddress, Coin, MsgTransfer } from "@terra-money/feather.js"
 import { toAmount } from "@terra-money/terra-utils"
 import { useInterchainAddresses } from "auth/hooks/useAddress"
 import { Form, FormItem, Input } from "components/form"

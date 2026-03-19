@@ -1,4 +1,4 @@
-import { MsgSend } from "@terraclassic-community/feather.js"
+import { MsgSend } from "@terra-money/feather.js"
 
 const id = Date.now()
 const address = "terra1x46rqay4d3cssq8gxxvqz8xt6nwlz4td20k38v"

@@ -1,29 +1,30 @@
 const path = require("path")
 const webpack = require("webpack")
-const CopyWebpackPlugin = require("copy-webpack-plugin")
 
 module.exports = {
-  mode: process.env.NODE_ENV || "development",
-  devtool: "inline-source-map",
-  bail: true,
+  mode: "production",
   entry: {
-    contentScript: path.join(__dirname, "contentScript.js"),
-    background: path.join(__dirname, "background.js"),
-    inpage: path.join(__dirname, "inpage.js"),
-    keplr: path.join(__dirname, "keplr.js"),
+    background: path.resolve(__dirname, "background.js"),
+    content: path.resolve(__dirname, "contentScript.js"),
   },
-  plugins: [
-    new webpack.DefinePlugin({
-      global: {},
-    }),
-    new CopyWebpackPlugin([
-      {
-        from: "node_modules/webextension-polyfill/dist/browser-polyfill.js",
-      },
-    ]),
-  ],
   output: {
-    path: path.join(__dirname, "..", "build"),
+    path: path.resolve(__dirname, "../build"),
     filename: "[name].js",
   },
+  resolve: {
+    extensions: [".js", ".ts"],
+    fallback: {
+      stream: require.resolve("stream-browserify"),
+      buffer: require.resolve("buffer"),
+      process: require.resolve("process/browser.js"),
+      crypto: require.resolve("crypto-browserify"),
+      vm: require.resolve("vm-browserify"),
+    },
+  },
+  plugins: [
+    new webpack.ProvidePlugin({
+      Buffer: ["buffer", "Buffer"],
+      process: "process/browser.js",
+    }),
+  ],
 }

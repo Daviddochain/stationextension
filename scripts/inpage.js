@@ -1,4 +1,4 @@
-import Station from "@terraclassic-community/station-connector"
+import Station from "@terra-money/station-connector"
 
 // legacy terra webapps
 window.isTerraExtensionAvailable = true
@@ -33,3 +33,4 @@ if (
 }
 
 window.terraClassicStation = new Station()
+

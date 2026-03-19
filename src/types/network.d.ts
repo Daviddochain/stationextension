@@ -1,4 +1,4 @@
-import { AccAddress } from "@terraclassic-community/feather.js"
+import { AccAddress } from "@terra-money/feather.js"
 
 type NetworkName = string
 type ChainID = string

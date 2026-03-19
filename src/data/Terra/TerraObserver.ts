@@ -1,4 +1,4 @@
-import { Block } from "@terraclassic-community/feather.js"
+import { Block } from "@terra-money/feather.js"
 import { useEffect, useRef, useState } from "react"
 import { OBSERVER } from "config/constants"
 import { useChainID } from "../wallet"

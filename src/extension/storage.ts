@@ -1,4 +1,4 @@
-import { AccAddress } from "@terraclassic-community/feather.js"
+import { AccAddress } from "@terra-money/feather.js"
 import browser from "webextension-polyfill"
 import decrypt from "auth/scripts/decrypt"
 import { ChainID, InterchainNetwork, TerraNetwork } from "types/network"

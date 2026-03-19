@@ -17,12 +17,7 @@ import { head, isNil } from "ramda"
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet"
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline"
 import { isDenom } from "@terra-money/terra-utils"
-import {
-  Coin,
-  Coins,
-  CreateTxOptions,
-  Fee,
-} from "@terraclassic-community/feather.js"
+import { Coin, Coins, CreateTxOptions, Fee } from "@terra-money/feather.js"
 
 import { Contents } from "types/components"
 import { has } from "utils/num"

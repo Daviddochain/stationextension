@@ -23,7 +23,7 @@ import { useQuery } from "react-query"
 import { useInterchainAddresses } from "auth/hooks/useAddress"
 import { useChainID, useNetwork } from "data/wallet"
 import { useInterchainLCDClient } from "data/queries/lcdClient"
-import { Fee } from "@terraclassic-community/feather.js"
+import { Fee } from "@terra-money/feather.js"
 import SignBytesDetails from "./SignBytesDetails"
 
 interface Values {
