@@ -26,6 +26,7 @@ export default function ManageWallets() {
   const { wallet, wallets } = useAuth()
   const { t } = useTranslation()
   const [path, setPath] = useState(Path.select)
+
   const selectedWallet = wallets.find((w) => {
     if ("words" in w) {
       return w.words["330"] === wallet?.words["330"]
@@ -36,6 +37,7 @@ export default function ManageWallets() {
       )
     }
   })
+
   const isLedger = is.ledger(wallet)
 
   if (!selectedWallet && !isLedger)
@@ -80,14 +82,19 @@ export default function ManageWallets() {
           <KeyboardBackspaceRoundedIcon style={{ fontSize: 24 }} />
         </button>
       )}
-      <ManageWalletsModal />
+
+      <ManageWalletsModal path={path} setPath={setPath} />
     </ModalButton>
   )
 }
 
-function ManageWalletsModal() {
+interface ManageWalletsModalProps {
+  path: Path
+  setPath: React.Dispatch<React.SetStateAction<Path>>
+}
+
+function ManageWalletsModal({ path, setPath }: ManageWalletsModalProps) {
   const { t } = useTranslation()
-  const [path, setPath] = useState(Path.select)
   const close = useModal()
 
   switch (path) {
@@ -118,5 +125,8 @@ function ManageWalletsModal() {
           <ManageWallet />
         </>
       )
+
+    default:
+      return null
   }
 }

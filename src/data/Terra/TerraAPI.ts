@@ -5,7 +5,7 @@ import BigNumber from "bignumber.js"
 import { ValAddress, Validator } from "@terra-money/feather.js"
 import { TerraValidator } from "types/validator"
 import { TerraProposalItem } from "types/proposal"
-import { useNetwork, useNetworkName } from "data/wallet"
+import { useNetwork } from "data/wallet"
 import { queryKey, RefetchOptions } from "../query"
 import { useValidators } from "data/queries/staking"
 

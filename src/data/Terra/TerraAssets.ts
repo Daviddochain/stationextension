@@ -11,12 +11,22 @@ import { NetworkName } from "types/network"
 
 const config = { baseURL: ASSETS }
 
+const getEmptyValue = (path: string) => {
+  if (path.includes("marketplace")) return []
+  return {}
+}
+
 export const useTerraAssets = <T>(path: string, callback?: (data: T) => T) => {
   return useQuery<T, AxiosError>(
     [queryKey.TerraAssets, path],
     async () => {
-      const { data } = await axios.get<T>(path, config)
-      return callback?.(data) ?? data
+      try {
+        const { data } = await axios.get<T>(path, config)
+        return callback?.(data) ?? data
+      } catch (error) {
+        console.warn(`useTerraAssets: failed to fetch ${path}`, error)
+        return getEmptyValue(path) as T
+      }
     },
     { ...RefetchOptions.INFINITY }
   )
@@ -32,9 +42,20 @@ export const useTerraAssetsByNetwork = <T>(
   return useQuery<T | undefined, AxiosError>(
     [queryKey.TerraAssets, path, networkName],
     async () => {
-      const { data } = await axios.get<Record<NetworkName, T>>(path, config)
-      if (!data[networkName]) return {} as T
-      return callback?.(data[networkName]) ?? data[networkName]
+      try {
+        const { data } = await axios.get<Record<NetworkName, T>>(path, config)
+        const networkData = data?.[networkName]
+
+        if (!networkData) return getEmptyValue(path) as T
+
+        return callback?.(networkData) ?? networkData
+      } catch (error) {
+        console.warn(
+          `useTerraAssetsByNetwork: failed to fetch ${path} for ${networkName}`,
+          error
+        )
+        return getEmptyValue(path) as T
+      }
     },
     { ...RefetchOptions.INFINITY, enabled: !disabled }
   )

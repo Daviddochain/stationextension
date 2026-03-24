@@ -16,6 +16,34 @@ import { useCreateWallet } from "./CreateWalletWizard"
 import styles from "./SelectAddress.module.scss"
 import { useNativeDenoms } from "data/token"
 
+type AddressOption = {
+  id: "terra-118" | "dungeon-118" | "dungeon-330"
+  bip: Bip
+  prefix: "terra" | "dungeon"
+  label: string
+}
+
+const ADDRESS_OPTIONS: AddressOption[] = [
+  {
+    id: "terra-118",
+    bip: 118,
+    prefix: "terra",
+    label: "Terra (118)",
+  },
+  {
+    id: "dungeon-118",
+    bip: 118,
+    prefix: "dungeon",
+    label: "Dungeon / Keplr (118)",
+  },
+  {
+    id: "dungeon-330",
+    bip: 330,
+    prefix: "dungeon",
+    label: "Dungeon Native (330)",
+  },
+]
+
 const SelectAddress = () => {
   const { t } = useTranslation()
   const currency = useCurrency()
@@ -25,50 +53,84 @@ const SelectAddress = () => {
   const { mnemonic, index } = values
   const seed = SeedKey.seedFromMnemonic(mnemonic)
 
-  /* query */
   const { data: results } = useQuery(
-    // FIXME: remove mnemonic from this array
     ["mnemonic", seed, index],
     async () => {
       const results = await Promise.allSettled(
-        ([118, 330] as const).map(async (bip) => {
-          const mk = new SeedKey({ seed, coinType: bip, index })
-          const address = mk.accAddress("terra")
+        ADDRESS_OPTIONS.map(async (option) => {
+          const mk = new SeedKey({
+            seed,
+            coinType: option.bip,
+            index,
+          })
+
+          const address = mk.accAddress(option.prefix)
+
           const [balance] = await lcd.bank.balance(address)
           const [delegations] = await lcd.staking.delegations(address)
           const [unbondings] = await lcd.staking.unbondingDelegations(address)
-          return { address, bip, index, balance, delegations, unbondings }
+
+          return {
+            id: option.id,
+            label: option.label,
+            address,
+            bip: option.bip,
+            prefix: option.prefix,
+            index,
+            balance,
+            delegations,
+            unbondings,
+          }
         })
       )
 
-      return results.map((result) => {
-        if (result.status === "rejected") throw new Error()
-        return result.value
-      })
+      return results
+        .filter(
+          (
+            result
+          ): result is PromiseFulfilledResult<{
+            id: "terra-118" | "dungeon-118" | "dungeon-330"
+            label: string
+            address: AccAddress
+            bip: Bip
+            prefix: "terra" | "dungeon"
+            index: number
+            balance: Coins
+            delegations: Delegation[]
+            unbondings: UnbondingDelegation[]
+          }> => result.status === "fulfilled"
+        )
+        .map((result) => result.value)
     },
     {
       onSuccess: (results) => {
-        const account118 = results.find(({ bip }) => bip === 118)
-        if (!account118) return
-        const { balance, delegations, unbondings } = account118
-        const is118Empty =
+        const dungeon118 = results.find((item) => item.id === "dungeon-118")
+        if (!dungeon118) return
+
+        const { balance, delegations, unbondings } = dungeon118
+        const isDungeon118Empty =
           !balance.toData().length && !delegations.length && !unbondings.length
-        if (is118Empty) createWallet(330, index)
+
+        if (isDungeon118Empty) {
+          createWallet(330, index)
+        }
       },
     }
   )
 
-  /* form */
-  const form = useForm<{ bip?: Bip }>()
+  const form = useForm<{ selection?: AddressOption["id"] }>()
   const { watch, setValue, handleSubmit } = form
-  const { bip } = watch()
+  const { selection } = watch()
 
-  const submit = ({ bip }: { bip?: Bip }) => {
-    if (!bip) return
-    createWallet(bip, index)
+  const submit = ({ selection }: { selection?: AddressOption["id"] }) => {
+    if (!selection) return
+
+    const selected = ADDRESS_OPTIONS.find((item) => item.id === selection)
+    if (!selected) return
+
+    createWallet(selected.bip, index)
   }
 
-  /* render */
   const animation = useThemeAnimation()
 
   if (!results)
@@ -79,14 +141,17 @@ const SelectAddress = () => {
     )
 
   interface Details {
+    id: AddressOption["id"]
+    label: string
     address: AccAddress
     bip: Bip
+    prefix: "terra" | "dungeon"
     balance: Coins
     delegations: Delegation[]
     unbondings: UnbondingDelegation[]
   }
 
-  const renderDetails = ({ address, bip, ...rest }: Details) => {
+  const renderDetails = ({ label, address, bip, prefix, ...rest }: Details) => {
     const { balance, delegations, unbondings } = rest
     const coins = sortCoins(balance, currency.id)
     const length = coins.length
@@ -95,6 +160,14 @@ const SelectAddress = () => {
       <Grid gap={4}>
         <Grid gap={12}>
           <Flex gap={8} start>
+            <Tag color="info" small>
+              {label}
+            </Tag>
+
+            <Tag color="info" small>
+              {prefix}
+            </Tag>
+
             <Tag color="info" small>
               {bip}
             </Tag>
@@ -143,9 +216,9 @@ const SelectAddress = () => {
           return (
             <AuthButton
               className={styles.button}
-              onClick={() => setValue("bip", item.bip)}
-              active={item.bip === bip}
-              key={item.bip}
+              onClick={() => setValue("selection", item.id)}
+              active={item.id === selection}
+              key={item.id}
             >
               {renderDetails(item)}
             </AuthButton>

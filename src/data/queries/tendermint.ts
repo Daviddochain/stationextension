@@ -7,16 +7,31 @@ import axios from "axios"
 
 export const useLocalNodeInfo = (chainID: string) => {
   const { networks } = useNetworks()
+
   return useQuery(
-    [queryKey.tendermint.nodeInfo],
+    [queryKey.tendermint.nodeInfo, chainID],
     async () => {
-      const { data } = await axios.get(
-        "cosmos/base/tendermint/v1beta1/node_info",
-        {
-          baseURL: networks[chainID][chainID].lcd,
-        }
-      )
-      return data
+      try {
+        const chainGroup = networks?.localterra
+        const localterraNetwork =
+          chainGroup && "localterra" in chainGroup
+            ? chainGroup.localterra
+            : undefined
+
+        if (!localterraNetwork?.lcd) return undefined
+
+        const { data } = await axios.get(
+          "cosmos/base/tendermint/v1beta1/node_info",
+          {
+            baseURL: localterraNetwork.lcd,
+          }
+        )
+
+        return data
+      } catch (error) {
+        console.warn(`useLocalNodeInfo: failed for ${chainID}`, error)
+        return undefined
+      }
     },
     { ...RefetchOptions.INFINITY, enabled: chainID === "localterra" }
   )
@@ -32,7 +47,6 @@ export const useValidateLCD = (
     async () => {
       if (!lcd || !chainID) return
 
-      // basic URL validation
       try {
         const url = new URL(lcd)
         if (url.protocol !== "http:" && url.protocol !== "https:") {
@@ -42,7 +56,6 @@ export const useValidateLCD = (
         return "Invalid URL provided"
       }
 
-      // node_info validation
       try {
         const { data } = await axios.get(
           "/cosmos/base/tendermint/v1beta1/node_info",
@@ -63,8 +76,6 @@ export const useValidateLCD = (
       } catch (e) {
         return "Unable to connect to the LCD"
       }
-
-      // valid
     },
     { ...RefetchOptions.INFINITY, enabled }
   )
@@ -80,23 +91,35 @@ export const useValidNetworks = (networks: Network[]) => {
   return useQueries(
     networks.map(({ chainID, prefix, lcd }) => {
       return {
-        queryKey: [queryKey.tendermint.nodeInfo, lcd],
+        queryKey: [queryKey.tendermint.nodeInfo, lcd, chainID],
         queryFn: async () => {
-          if (prefix === "terra") return chainID
+          if (!lcd || !chainID || !prefix) return undefined
 
-          const { data } = (await axios.get(
-            `/cosmos/bank/v1beta1/balances/${randomAddress(prefix)}`,
-            {
-              baseURL: lcd, // TODO: pass custom lcd to the function
-              timeout: VALIDATION_TIMEOUT,
-            }
-          )) || {
-            data: {},
+          try {
+            if (prefix === "terra") return chainID
+
+            const { data } = (await axios.get(
+              `/cosmos/bank/v1beta1/balances/${randomAddress(prefix)}`,
+              {
+                baseURL: lcd,
+                timeout: VALIDATION_TIMEOUT,
+              }
+            )) || { data: {} }
+
+            if (Array.isArray(data?.balances)) return chainID
+
+            return undefined
+          } catch (error) {
+            console.warn(`useValidNetworks: ${chainID} unavailable`, error)
+            return undefined
           }
-
-          if (Array.isArray(data.balances)) return chainID
         },
-        ...RefetchOptions.INFINITY,
+        retry: false,
+        staleTime: Infinity,
+        cacheTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        refetchOnMount: false,
       }
     })
   )

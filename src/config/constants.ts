@@ -5,8 +5,8 @@ export const LAZY_LIMIT = 999
 export const BRIDGE = "https://walletconnect.terra.dev"
 
 /* api */
-export const ASSETS = "https://assets.terraclassic.community"
-export const STATION_ASSETS = "https://station-assets.terraclassic.community"
+export const ASSETS = "http://localhost:3001"
+export const STATION_ASSETS = "http://localhost:3001"
 export const OBSERVER = "wss://observer.terra.dev"
 
 /* website */

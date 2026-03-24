@@ -15,6 +15,42 @@ export const [useNetworks, NetworksProvider] = createContext<{
   filterDisabledNetworks: <T>(network: Record<string, T>) => Record<string, T>
 }>("useNetworks")
 
+const normalizeAssetUrl = (url?: string) => {
+  if (!url) return url
+
+  if (url.startsWith("undefined/")) {
+    return `${STATION_ASSETS}/${url.replace(/^undefined\//, "")}`
+  }
+
+  if (url.startsWith("undefined")) {
+    return `${STATION_ASSETS}/${url.replace(/^undefined/, "")}`
+  }
+
+  if (url.startsWith("http://localhost:3001/")) {
+    return url.replace("http://localhost:3001", STATION_ASSETS)
+  }
+
+  if (url.startsWith("/img/")) {
+    return `${STATION_ASSETS}${url}`
+  }
+
+  return url
+}
+
+const normalizeChainGroup = <T extends Record<string, any>>(group?: T): T => {
+  return Object.fromEntries(
+    Object.entries(group ?? {}).map(([key, value]) => [
+      key,
+      value && typeof value === "object"
+        ? {
+            ...value,
+            icon: normalizeAssetUrl(value.icon),
+          }
+        : value,
+    ])
+  ) as T
+}
+
 const InitNetworks = ({ children }: PropsWithChildren<{}>) => {
   const [defaultNetworks, setNetworks] = useState<InterchainNetworks>()
   const { customLCDs } = useCustomLCDs()
@@ -40,26 +76,39 @@ const InitNetworks = ({ children }: PropsWithChildren<{}>) => {
 
   useEffect(() => {
     const fetchChains = async () => {
-      const { data: chains } = await axios.get<InterchainNetworks>(
-        "/chains.json",
-        {
+      try {
+        const response = await axios.get<InterchainNetworks>("/chains.json", {
           baseURL: STATION_ASSETS,
+        })
+
+        const chains = response?.data
+
+        if (!chains) {
+          console.error("InitNetworks: no chains.json data returned")
+          return
         }
-      )
-      setNetworks(chains)
+
+        setNetworks({
+          ...chains,
+          mainnet: normalizeChainGroup(chains.mainnet),
+          testnet: normalizeChainGroup(chains.testnet),
+          classic: normalizeChainGroup(chains.classic),
+          localterra: normalizeChainGroup(chains.localterra),
+        })
+      } catch (error) {
+        console.error("InitNetworks: failed to fetch chains.json", error)
+      }
     }
 
     fetchChains()
   }, [])
 
   const testBase = networks
-    ? Object.values(
-        {
-          ...networks.mainnet,
-          ...networks.testnet,
-          ...networks.classic,
-        } ?? {}
-      ).map((chain) => {
+    ? Object.values({
+        ...networks.mainnet,
+        ...networks.testnet,
+        ...networks.classic,
+      }).map((chain) => {
         const lcd = customLCDs[chain?.chainID] ?? chain.lcd
         return { ...chain, lcd }
       })

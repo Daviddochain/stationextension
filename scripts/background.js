@@ -1,14 +1,15 @@
-const PortStream = require("extension-port-stream")
-if (typeof importScripts !== "undefined") {
-  importScripts("browser-polyfill.js")
-}
+const browser = require("webextension-polyfill")
+const PortStreamModule = require("extension-port-stream")
+const PortStream = PortStreamModule.default || PortStreamModule
 
 const connectRemote = (remotePort) => {
   if (remotePort.name !== "TerraClassicStationExtension") {
     return
   }
 
-  const origin = remotePort.sender.origin || remotePort.sender.url
+  const origin =
+    (remotePort.sender && (remotePort.sender.origin || remotePort.sender.url)) ||
+    ""
 
   console.log("Terra Classic Station(background): connectRemote", remotePort)
   const portStream = new PortStream(remotePort)
@@ -21,11 +22,8 @@ const connectRemote = (remotePort) => {
     console.log("Terra Classic Station(background): portStream.on", data)
     const { type, ...payload } = data
 
-    /* handle sign & post */
     const handleRequest = (key) => {
       const handleChange = (changes, namespace) => {
-        // Detects changes in storage and returns responses if there are changes.
-        // When the request is successful, it also closes the popup.
         if (namespace === "local") {
           const { oldValue, newValue } = changes[key] || {}
 
@@ -41,16 +39,14 @@ const connectRemote = (remotePort) => {
               changed.origin === origin &&
               sendResponse("on" + capitalize(key), changed)
 
-            if (changed.uuid) {
-              browser.storage.local.set(
-                key,
-                newValue.filter((tx) => tx.uuid !== changed.uuid)
-              )
-            } else {
-              browser.storage.local.set(
-                key,
-                newValue.filter((tx) => tx.id !== changed.id)
-              )
+            if (changed && changed.uuid) {
+              browser.storage.local.set({
+                [key]: newValue.filter((tx) => tx.uuid !== changed.uuid),
+              })
+            } else if (changed) {
+              browser.storage.local.set({
+                [key]: newValue.filter((tx) => tx.id !== changed.id),
+              })
             }
 
             browser.storage.local
@@ -60,16 +56,13 @@ const connectRemote = (remotePort) => {
                 const nextRequest =
                   sign.some(getRequest) || post.some(getRequest)
 
-                !nextRequest && closePopup()
+                if (!nextRequest) closePopup()
               })
           }
         }
       }
 
       const handleGet = (storage) => {
-        // Check the storage for any duplicate requests already, place them at the end of the storage, and then open a popup.
-        // Then it detects changes in storage. (See code above)
-        // TODO: Even if the popup is already open, reactivate the popup
         const list = storage[key] || []
 
         const alreadyRequested =
@@ -77,12 +70,13 @@ const connectRemote = (remotePort) => {
             (req) => req.id === payload.id && req.origin === origin
           ) !== -1
 
-        !alreadyRequested &&
+        if (!alreadyRequested) {
           browser.storage.local.set({
             [key]: payload.purgeQueue
               ? [{ ...payload, origin }]
               : [...list, { ...payload, origin }],
           })
+        }
 
         openPopup()
         browser.storage.onChanged.addListener(handleChange)
@@ -104,10 +98,8 @@ const connectRemote = (remotePort) => {
         })
         break
 
-      case "connect":
+      case "connect": {
         const handleChangeConnect = (changes, namespace) => {
-          // It is recursive.
-          // After referring to a specific value in the storage, perform the function listed below again.
           if (namespace === "local" && changes.connect) {
             const { newValue, oldValue } = changes.connect
 
@@ -116,10 +108,11 @@ const connectRemote = (remotePort) => {
               oldValue.request.length - 1 === newValue.request.length &&
               oldValue.allowed.length === newValue.allowed.length
 
-            if (!denied)
+            if (!denied) {
               browser.storage.local
                 .get(["connect", "wallet"])
                 .then(handleGetConnect)
+            }
           }
         }
 
@@ -127,10 +120,6 @@ const connectRemote = (remotePort) => {
           connect = { request: [], allowed: [] },
           wallet = {},
         }) => {
-          // 1. If the address is authorized and the wallet exists
-          //    - send back the response and close the popup.
-          // 2. If not,
-          //    - store the address on the storage and open the popup to request it (only if it is not the requested address).
           const isAllowed = connect.allowed.includes(origin)
           const walletExists = wallet.address
           const alreadyRequested = [
@@ -143,10 +132,11 @@ const connectRemote = (remotePort) => {
             closePopup()
             browser.storage.onChanged.removeListener(handleChangeConnect)
           } else {
-            !alreadyRequested &&
+            if (!alreadyRequested) {
               browser.storage.local.set({
                 connect: { ...connect, request: [origin, ...connect.request] },
               })
+            }
 
             openPopup()
             browser.storage.onChanged.addListener(handleChangeConnect)
@@ -154,13 +144,11 @@ const connectRemote = (remotePort) => {
         }
 
         browser.storage.local.get(["connect", "wallet"]).then(handleGetConnect)
-
         break
+      }
 
-      case "get-pubkey":
+      case "get-pubkey": {
         const handleChangePubkey = (changes, namespace) => {
-          // It is recursive.
-          // After referring to a specific value in the storage, perform the function listed below again.
           if (namespace === "local" && (changes.wallet || changes.pubkey)) {
             const hasPubKey = changes.wallet && changes.wallet.newValue.pubkey
 
@@ -170,7 +158,6 @@ const connectRemote = (remotePort) => {
                 .then(handleGetPubkey)
             } else {
               browser.storage.local.get(["pubkey"]).then(({ pubkey }) => {
-                // pubkey terminated
                 if (!pubkey) {
                   sendResponse("onGetPubkey", null)
                   closePopup()
@@ -185,10 +172,6 @@ const connectRemote = (remotePort) => {
           connect = { request: [], allowed: [] },
           wallet = {},
         }) => {
-          // 1. If the address is authorized and the wallet exists
-          //    - send back the response and close the popup.
-          // 2. If not,
-          //    - store the address on the storage and open the popup to request it (only if it is not the requested address).
           const isAllowed = connect.allowed.includes(origin)
           const hasPubKey = wallet.pubkey
 
@@ -207,8 +190,8 @@ const connectRemote = (remotePort) => {
         }
 
         browser.storage.local.get(["connect", "wallet"]).then(handleGetPubkey)
-
         break
+      }
 
       case "suggestChain":
         handleRequest("suggestChain")
@@ -230,7 +213,6 @@ const connectRemote = (remotePort) => {
 
 browser.runtime.onConnect.addListener(connectRemote)
 
-// popup requests from contentScript
 browser.runtime.onMessage.addListener(function (request, sender) {
   if (!sender.tab) return
 
@@ -241,20 +223,21 @@ browser.runtime.onMessage.addListener(function (request, sender) {
     case "CLOSE_POPUP":
       closePopup()
       break
+    default:
+      break
   }
 })
 
-/* popup */
-// TODO: Actions such as transaction rejection if user closes a popup
 let tabId = undefined
 let isPopupOpen = false
+
 browser.tabs.onRemoved.addListener(() => {
   tabId = undefined
   isPopupOpen = false
 })
 
 const POPUP_WIDTH = 480
-const POPUP_HEIGHT = 600 // Chrome extension maximum height
+const POPUP_HEIGHT = 600
 
 const getCenter = (window) => {
   return {
@@ -270,6 +253,7 @@ const openPopup = () => {
     width: POPUP_WIDTH,
     height: POPUP_HEIGHT,
   }
+
   if (!isPopupOpen && !tabId) {
     isPopupOpen = true
 
@@ -277,14 +261,13 @@ const openPopup = () => {
       .create({ url: browser.runtime.getURL("index.html"), active: false })
       .then((tab) => {
         tabId = tab.id
+
         browser.windows.getCurrent().then((window) => {
           const center = getCenter(window)
           const top = Math.max(center.top, 0) || 0
           const left = Math.max(center.left, 0) || 0
 
           const config = { ...popup, tabId: tab.id, top, left }
-
-          // type error here, it might cause problems
           browser.windows.create(config)
         })
       })
@@ -294,14 +277,12 @@ const openPopup = () => {
 const closePopup = () => {
   if (tabId) {
     isPopupOpen = false
-    tabId && browser.tabs.remove(tabId)
+    browser.tabs.remove(tabId)
   }
 }
 
-/* utils */
 const capitalize = (string) => string.charAt(0).toUpperCase() + string.slice(1)
 
-// Invoke alarm periodically to keep service worker persistent
 browser.alarms.create("keep-alive-alarm", {
   periodInMinutes: 0.25,
   delayInMinutes: 0.25,
@@ -311,4 +292,3 @@ browser.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "keep-alive-alarm") {
   }
 })
-

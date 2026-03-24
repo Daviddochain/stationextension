@@ -35,7 +35,7 @@ export interface WhitelistData {
   legacyWhitelist: Whitelist
 }
 
-// chains and token withelist are always required from the beginning.
+// chains and token whitelist are always required from the beginning.
 const [useFetchedData, WhitelistProvider] =
   createContext<WhitelistData>("useWhitelist")
 export { WhitelistProvider }
@@ -50,22 +50,24 @@ export function getChainNamefromID(
   id: string | undefined,
   chains: Record<string, InterchainNetwork>
 ) {
+  if (!id) return ""
+
   return (
-    Object.values(chains ?? {})
-      .find(({ chainID }) => chainID === id)
-      ?.name.toLowerCase() ?? ""
-  )
+    Object.values(chains ?? {}).find(({ chainID }) => chainID === id)?.name ??
+    ""
+  ).toLowerCase()
 }
 
 export function getChainIdFromAddress(
   address: string,
   chains: Record<string, InterchainNetwork>
 ) {
+  if (!address) return ""
+
   return (
-    Object.values(chains ?? {})
-      .find(({ prefix }) => address.includes(prefix))
-      ?.chainID.toLowerCase() ?? ""
-  )
+    Object.values(chains ?? {}).find(({ prefix }) => address.startsWith(prefix))
+      ?.chainID ?? ""
+  ).toLowerCase()
 }
 
 export function useIBCChannels() {

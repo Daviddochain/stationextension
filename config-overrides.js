@@ -1,6 +1,6 @@
 const webpack = require("webpack")
 
-module.exports = function override(config, env) {
+module.exports = function override(config) {
   config.resolve = config.resolve || {}
   config.resolve.fallback = {
     ...(config.resolve.fallback || {}),
@@ -14,7 +14,7 @@ module.exports = function override(config, env) {
     ...(config.plugins || []),
     new webpack.ProvidePlugin({
       Buffer: ["buffer", "Buffer"],
-      process: "process/browser.js",
+      process: "process/browser",
     }),
   ]
 
@@ -23,32 +23,31 @@ module.exports = function override(config, env) {
     /Failed to parse source map/,
   ]
 
-  return {
-    ...config,
-    resolve: config.resolve,
-    plugins: config.plugins,
-    ignoreWarnings: config.ignoreWarnings,
-    optimization: {
-      splitChunks: {
-        minSize: 20000,
-        maxSize: 4000000,
-        minChunks: 1,
-        maxAsyncRequests: 30,
-        maxInitialRequests: 30,
-        enforceSizeThreshold: 50000,
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: "vendors",
-            chunks: "all",
-          },
-          default: {
-            minChunks: 2,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
+  config.optimization = {
+    ...(config.optimization || {}),
+    splitChunks: {
+      ...(config.optimization?.splitChunks || {}),
+      minSize: 20000,
+      maxSize: 4000000,
+      minChunks: 1,
+      maxAsyncRequests: 30,
+      maxInitialRequests: 30,
+      enforceSizeThreshold: 50000,
+      cacheGroups: {
+        ...(config.optimization?.splitChunks?.cacheGroups || {}),
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: "vendors",
+          chunks: "all",
+        },
+        default: {
+          minChunks: 2,
+          priority: -20,
+          reuseExistingChunk: true,
         },
       },
     },
   }
+
+  return config
 }

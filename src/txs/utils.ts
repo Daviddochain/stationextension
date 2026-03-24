@@ -10,7 +10,7 @@ import axios from "axios"
 // Intercept all axios errors.
 axios.interceptors.response.use(
   (response) => response,
-  (error) => {}
+  (error) => Promise.reject(error)
 )
 
 export const getPlaceholder = (decimals = 6) => "0.".padEnd(decimals + 2, "0")

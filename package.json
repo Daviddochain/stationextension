@@ -6,10 +6,10 @@
   "repository": "github:classic-terra/station-extension",
   "license": "MIT",
   "scripts": {
-    "start": "cross-env TSC_COMPILE_ON_ERROR=true react-app-rewired start",
+    "start": "cross-env TSC_COMPILE_ON_ERROR=true craco start",
     "build-scripts": "webpack --config scripts/webpack.config.js",
-    "build": "cross-env react-app-rewired build && npm run build-scripts",
-    "test": "react-scripts test",
+    "build": "cross-env craco build && npm run build-scripts",
+    "test": "craco test",
     "prepare": "husky install",
     "pre-commit": "lint-staged",
     "analyze": "source-map-explorer 'build/static/js/*.js'"
@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@craco/craco": "^7.1.0",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@types/crypto-js": "^4.1.1",

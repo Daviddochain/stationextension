@@ -36,10 +36,24 @@ const useAuth = () => {
   const [wallet, setWallet] = useRecoilState(walletState)
   const wallets = getStoredWallets()
 
+  const syncExtensionWallet = useCallback(async (walletData?: any) => {
+    try {
+      const extensionApi = (globalThis as any)?.chrome
+      if (!extensionApi?.storage?.local?.set) return
+
+      await extensionApi.storage.local.set({
+        wallet: walletData ?? null,
+      })
+    } catch (error) {
+      console.error("Failed to sync extension wallet", error)
+    }
+  }, [])
+
   /* connect */
   const connect = useCallback(
     (name: string) => {
       const storedWallet = getStoredWallet(name)
+
       if ("address" in storedWallet) {
         const { address, lock } = storedWallet
         const words = {
@@ -54,15 +68,32 @@ const useAuth = () => {
 
         storeWallet(wallet)
         setWallet(wallet as any)
+
+        const walletForExtension = {
+          ...wallet,
+          address: addressFromWords(words["330"], "terra"),
+        }
+
+        void syncExtensionWallet(walletForExtension)
       } else {
         const { lock } = storedWallet
         if (lock) throw new Error("Wallet is locked")
 
         storeWallet(storedWallet)
         setWallet(storedWallet as any)
+
+        const walletForExtension = {
+          ...storedWallet,
+          address:
+            "words" in storedWallet
+              ? addressFromWords(storedWallet.words["330"], "terra")
+              : (storedWallet as any).address,
+        }
+
+        void syncExtensionWallet(walletForExtension)
       }
     },
-    [setWallet]
+    [setWallet, syncExtensionWallet]
   )
 
   const connectLedger = useCallback(
@@ -82,11 +113,19 @@ const useAuth = () => {
         lock: false as const,
         name,
       }
+
       addWallet(wallet)
       storeWallet(wallet)
       setWallet(wallet as any)
+
+      const walletForExtension = {
+        ...wallet,
+        address: addressFromWords(words["330"], "terra"),
+      }
+
+      void syncExtensionWallet(walletForExtension)
     },
-    [setWallet]
+    [setWallet, syncExtensionWallet]
   )
 
   /* connected */
@@ -104,7 +143,8 @@ const useAuth = () => {
   const disconnect = useCallback(() => {
     clearWallet()
     setWallet(undefined)
-  }, [setWallet])
+    void syncExtensionWallet(null)
+  }, [setWallet, syncExtensionWallet])
 
   const lock = useCallback(() => {
     const { name } = getConnectedWallet()

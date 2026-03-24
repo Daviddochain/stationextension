@@ -24,12 +24,10 @@ export const useNetworkState = () => {
   return [storedNetwork, changeNetwork] as const
 }
 
-/* helpers */
 export const useNetworkOptions = () => {
   return [
     { value: "mainnet", label: "Mainnets" },
-    { value: "testnet", label: "Testnets" },
-    { value: "localterra", label: "LocalTerra" },
+    { value: "classic", label: "Classic" },
   ]
 }
 
@@ -48,15 +46,16 @@ export const useNetwork = (): Record<ChainID, InterchainNetwork> => {
     )
   }
 
-  // multisig wallet are supported only on terra
   if (is.multisig(wallet)) {
     const terra = Object.values(
       withCustomLCDs(
         networks[network as NetworkName] as Record<ChainID, InterchainNetwork>
       ) ?? {}
     ).find(({ prefix }) => prefix === "terra")
+
     if (!terra) return {}
-    return filterEnabledNetworks({ [terra?.chainID]: terra })
+
+    return filterEnabledNetworks({ [terra.chainID]: terra })
   }
 
   if (wallet) {
@@ -68,7 +67,7 @@ export const useNetwork = (): Record<ChainID, InterchainNetwork> => {
 
     return filterEnabledNetworks(
       enabledChains.reduce((acc, chain) => {
-        acc[chain?.chainID] = chain
+        acc[chain.chainID] = chain
         return acc
       }, {} as Record<ChainID, InterchainNetwork>)
     )
@@ -84,6 +83,7 @@ export const useNetworkName = () => {
 
 export const useChainID = () => {
   const network = useRecoilValue(networkState)
+
   switch (network) {
     case "mainnet":
       return "columbus-5"

@@ -27,16 +27,29 @@ export const useInitialTokenBalance = () => {
               chain: chainID,
             } as CoinBalance
 
-          const { balance } = await lcd.wasm.contractQuery<{ balance: Amount }>(
-            token,
-            { balance: { address } }
-          )
+          try {
+            const { balance } = await lcd.wasm.contractQuery<{
+              balance: Amount
+            }>(token, { balance: { address } })
 
-          return {
-            amount: balance,
-            denom: token,
-            chain: chainID,
-          } as CoinBalance
+            return {
+              amount: balance,
+              denom: token,
+              chain: chainID,
+            } as CoinBalance
+          } catch (error) {
+            console.warn(
+              `useInitialTokenBalance: failed for token ${token} on chain ${chainID}`,
+              error
+            )
+
+            return {
+              amount: "0",
+              denom: token,
+              chain: chainID,
+              unavailable: true,
+            } as CoinBalance
+          }
         },
         ...RefetchOptions.DEFAULT,
       }
@@ -57,15 +70,25 @@ export const useInitialBankBalance = () => {
       return {
         queryKey: [queryKey.bank.balances, address, chainID],
         queryFn: async () => {
-          const bal = ["phoenix-1", "pisco-1"].includes(chainID)
-            ? await lcd.bank.spendableBalances(address)
-            : await lcd.bank.balance(address)
+          if (!address) return [] as CoinBalance[]
 
-          return bal[0].toArray().map(({ denom, amount }) => ({
-            denom,
-            amount: amount.toString(),
-            chain: chainID,
-          })) as CoinBalance[]
+          try {
+            const bal = ["phoenix-1", "pisco-1"].includes(chainID)
+              ? await lcd.bank.spendableBalances(address)
+              : await lcd.bank.balance(address)
+
+            return bal[0].toArray().map(({ denom, amount }) => ({
+              denom,
+              amount: amount.toString(),
+              chain: chainID,
+            })) as CoinBalance[]
+          } catch (error) {
+            console.warn(
+              `useInitialBankBalance: failed for chain ${chainID}`,
+              error
+            )
+            return [] as CoinBalance[]
+          }
         },
         disabled: !address,
         ...RefetchOptions.DEFAULT,
@@ -78,6 +101,7 @@ export interface CoinBalance {
   amount: string
   denom: string
   chain: string
+  unavailable?: boolean
 }
 
 export const useBalances = () => {
@@ -93,12 +117,22 @@ export const useBalances = () => {
       // TODO: Pagination
       // Required when the number of results exceed 100
       const balances = await Promise.all(
-        chains.map((chain) => lcd.bank.balance(addresses[chain]))
+        chains.map(async (chain) => {
+          try {
+            return await lcd.bank.balance(addresses[chain])
+          } catch (error) {
+            console.warn(`useBalances: failed for chain ${chain}`, error)
+            return null
+          }
+        })
       )
 
       const result = [] as CoinBalance[]
       chains.forEach((chain, i) => {
-        balances[i][0].toArray().forEach(({ denom, amount }) =>
+        const balanceResult = balances[i]
+        if (!balanceResult) return
+
+        balanceResult[0].toArray().forEach(({ denom, amount }) =>
           result.push({
             denom,
             amount: amount.toString(),

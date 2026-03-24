@@ -16,15 +16,10 @@ export interface Values {
 
 /* context */
 interface CreateWallet {
-  /* step */
   setStep: (index: number) => void
-
-  /* form values */
   generated: boolean
   values: Values
   setValues: (values: Values) => void
-
-  /* create wallet */
   createdWallet?: SingleWallet
   createWallet: (coinType: Bip, index?: number) => void
 }
@@ -40,18 +35,16 @@ interface Props {
 const DefaultValues = { name: "", password: "", mnemonic: "", index: 0 }
 
 const CreateWalletWizard = ({ defaultMnemonic = "", beforeCreate }: Props) => {
-  /* step */
   const location = useLocation()
   const navigate = useNavigate()
   const step = Number(location.hash.replace("#", "")) || 1
   const setStep = (index: number) => navigate({ hash: String(index) })
 
-  /* form values */
   const initial = { ...DefaultValues, mnemonic: defaultMnemonic }
   const [values, setValues] = useState(initial)
 
-  /* create wallet */
   const [createdWallet, setCreatedWallet] = useState<SingleWallet>()
+
   const createWallet = (coinType: Bip, index = 0) => {
     const { name, password, mnemonic } = values
 
@@ -59,8 +52,9 @@ const CreateWalletWizard = ({ defaultMnemonic = "", beforeCreate }: Props) => {
     const key330 = new SeedKey({ seed, coinType, index })
     const key118 = new SeedKey({ seed, coinType: 118, index })
     const key60 = new SeedKey({ seed, coinType: 60, index })
+
     const words = {
-      "330": wordsFromAddress(key330.accAddress("terra")),
+      "330": wordsFromAddress(key330.accAddress("dungeon")),
       "118": wordsFromAddress(key118.accAddress("terra")),
       "60": wordsFromAddress(key60.accAddress("inj")),
     }
@@ -83,11 +77,11 @@ const CreateWalletWizard = ({ defaultMnemonic = "", beforeCreate }: Props) => {
       index,
       legacy: coinType === 118,
     })
+
     setCreatedWallet({ name, words, pubkey })
     setStep(3)
   }
 
-  /* effect: reset memory on unmount */
   useEffect(() => {
     return () => {
       setValues(DefaultValues)
@@ -95,7 +89,6 @@ const CreateWalletWizard = ({ defaultMnemonic = "", beforeCreate }: Props) => {
     }
   }, [setValues])
 
-  /* render */
   const render = () => {
     switch (step) {
       case 1:

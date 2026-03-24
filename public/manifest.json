@@ -1,31 +1,35 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Terra Classic Station Wallet",
   "version": "1.0.18",
   "background": {
-    "scripts": ["background.js"],
-    "persistent": true
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["browser-polyfill.js", "contentScript.js"],
+      "js": ["browser-polyfill.js", "content.js"],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
-  "browser_action": {
+  "action": {
     "default_popup": "index.html",
     "default_icon": "icon-32.png"
   },
   "options_ui": {
     "page": "index.html"
   },
-  "web_accessible_resources": ["inpage.js", "keplr.js", "index.html"],
+  "web_accessible_resources": [
+    {
+      "resources": ["inpage.js", "keplr.js", "index.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "icons": {
     "128": "icon-128.png",
     "180": "icon-180.png"
   },
-  "permissions": ["storage", "alarms"],
-  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'"
+  "permissions": ["storage", "alarms"]
 }

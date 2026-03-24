@@ -22,12 +22,13 @@ export interface Props extends TokenItem, QueryState {
 }
 
 const Asset = (props: Props) => {
-  const { token, icon, symbol, balance, denom, decimals, id, ...state } = props
+  const { token, icon, symbol, balance, decimals, id, ...state } = props
   const { t } = useTranslation()
   const currency = useCurrency()
   const network = useNetwork()
-  const chains = props.chains.filter((chain) => !!network[chain])
-  const singleNetworkIcon = network[chains[0]]?.icon
+  const chains = (props.chains ?? []).filter((chain) => !!network?.[chain])
+  const singleNetworkIcon =
+    chains.length === 1 ? network?.[chains[0]]?.icon : undefined
 
   const { data: prices, ...pricesState } = useExchangeRates()
   const { route, setRoute } = useWalletRoute()
@@ -35,43 +36,69 @@ const Asset = (props: Props) => {
   const coinPrice = (props.price || prices?.[token]?.price) ?? 0
   const change = (props.change || prices?.[token]?.change) ?? 0
 
-  const walletPrice = coinPrice * parseInt(balance ?? "0")
+  const rawBalance = Number(balance ?? "0")
+  const humanBalance =
+    decimals && decimals > 0 ? rawBalance / Math.pow(10, decimals) : rawBalance
+
+  const walletPrice = coinPrice * humanBalance
+  const hasBalance = humanBalance > 0
+
+  const fiatFixed =
+    walletPrice < 0.000001
+      ? 8
+      : walletPrice < 0.01
+      ? 6
+      : walletPrice < 1
+      ? 4
+      : 2
+
+  const amountFixed =
+    humanBalance < 0.000001
+      ? 8
+      : humanBalance < 0.01
+      ? 6
+      : humanBalance < 1
+      ? 4
+      : 2
 
   return (
     <article
       className={styles.asset}
       onClick={() => {
-        if (route.path !== Path.coin)
+        if (route.path !== Path.coin) {
           setRoute({ path: Path.coin, denom: id, previousPage: route })
+        }
       }}
     >
       <section className={styles.details}>
         <div className={styles.token__icon__container}>
           <TokenIcon token={token} icon={icon} size={28} />
-          {chains && chains.length === 1 && (
+          {singleNetworkIcon && chains.length === 1 && (
             <img
               src={singleNetworkIcon}
-              alt={network[chains[0]]?.name}
+              alt={network?.[chains[0]]?.name ?? chains[0]}
               className={styles.chain__icon}
             />
           )}
         </div>
+
         <div className={styles.details__container}>
           <div className={styles.top__row}>
             <h1 className={styles.symbol}>
               <span className={styles.symbol__name}>{symbol}</span>
-              {chains && chains.length > 1 && (
+              {chains.length > 1 && (
                 <span className={styles.chain__num}>{chains.length}</span>
               )}
             </h1>
+
             <h1 className={styles.price}>
               {currency.symbol}{" "}
-              {coinPrice ? (
+              {coinPrice && hasBalance ? (
                 <Read
                   {...props}
-                  amount={walletPrice}
-                  decimals={decimals}
-                  fixed={2}
+                  amount={walletPrice.toString()}
+                  decimals={0}
+                  fixed={fiatFixed}
                   denom=""
                   token=""
                 />
@@ -80,27 +107,27 @@ const Asset = (props: Props) => {
               )}
             </h1>
           </div>
+
           <div className={styles.bottom__row}>
             <h2
               className={change >= 0 ? styles.change__up : styles.change__down}
             >
               {change >= 0 ? <PriceUp /> : <PriceDown />} {change.toFixed(2)}%
             </h2>
+
             <h2 className={styles.amount}>
               <WithFetching {...combineState(state, pricesState)} height={1}>
                 {(progress, wrong) => (
                   <>
                     {progress}
                     {wrong ? (
-                      <span className="danger">
-                        {t("Failed to query balance")}
-                      </span>
+                      <span className="danger">{t("Unavailable")}</span>
                     ) : (
                       <Read
                         {...props}
                         amount={balance}
                         token=""
-                        fixed={2}
+                        fixed={amountFixed}
                         decimals={decimals}
                       />
                     )}

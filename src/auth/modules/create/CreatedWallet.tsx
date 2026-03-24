@@ -12,7 +12,10 @@ const CreatedWallet = ({ name, words }: SingleWallet) => {
   const navigate = useNavigate()
   const { connect } = useAuth()
 
-  const address = addressFromWords(words["330"])
+  // 🔥 Generate BOTH addresses
+  const terraAddress = addressFromWords(words["330"], "terra")
+  const dungeonAddress = addressFromWords(words["330"], "dungeon")
+
   const submit = () => {
     connect(name)
     navigate("/", { replace: true })
@@ -29,7 +32,14 @@ const CreatedWallet = ({ name, words }: SingleWallet) => {
         <Details>
           <article>
             <h1>{name}</h1>
-            <p>{address}</p>
+
+            <p>
+              <strong>Terra:</strong> {terraAddress}
+            </p>
+
+            <p>
+              <strong>Dungeon:</strong> {dungeonAddress}
+            </p>
           </article>
         </Details>
 
