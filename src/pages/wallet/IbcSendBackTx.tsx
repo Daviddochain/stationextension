@@ -60,7 +60,6 @@ function Steps({
                   color="inherit"
                   className={styles.progress}
                   style={{ height: 8, borderRadius: 4 }}
-                  //sx={{ position: "absolute" /* to overwrite */ }}
                 />
               )}
             </div>
@@ -104,7 +103,7 @@ function IbcSendBackTx({ token, chainID }: Props) {
   >(undefined)
 
   async function getBalance(denom: string, chainID: string) {
-    if (!addresses) return 0
+    if (!addresses || !lcd || !addresses[chainID]) return 0
 
     if (AccAddress.validate(denom)) {
       const { balance } = await lcd.wasm.contractQuery<{ balance: Amount }>(
@@ -126,7 +125,6 @@ function IbcSendBackTx({ token, chainID }: Props) {
   const isKujira = networks[ibcDetails?.chainIDs[0] ?? ""]?.prefix === "kujira"
 
   useEffect(() => {
-    // around 3 minutes with a 10 seconds interval
     let maxIterations = 18
 
     if (waitUntil) {
@@ -134,13 +132,12 @@ function IbcSendBackTx({ token, chainID }: Props) {
         while (maxIterations--) {
           const tokenBalance = await getBalance(
             waitUntil.denom,
-            waitUntil?.chainID
+            waitUntil.chainID
           )
 
           if (Number(tokenBalance) > waitUntil.balance) {
             setWaitUntil(undefined)
             setIsLoading(false)
-            // refetch all balances for the next form
             queryClient.invalidateQueries(queryKey.bank.balances)
             return
           }
@@ -148,7 +145,6 @@ function IbcSendBackTx({ token, chainID }: Props) {
           await new Promise((resolve) => setTimeout(resolve, 10_000))
         }
 
-        // if this get's executed, it means that the transaction failed
         setWaitUntil(undefined)
         setError("Transaction failed.")
       })()
@@ -232,7 +228,7 @@ function IbcSendBackTx({ token, chainID }: Props) {
     amount,
     coins,
     chain: chains[step],
-    disabled: false,
+    disabled: false as const,
     balance,
     estimationTxValues: { input: 1 },
     createTx,
@@ -253,7 +249,6 @@ function IbcSendBackTx({ token, chainID }: Props) {
           )
       )
 
-      // wait until balance on the other chain is increased
       getBalance(nextDenom, chains[step + 1]).then((balance) =>
         setWaitUntil({ chainID: chains[step + 1], denom: nextDenom, balance })
       )
@@ -269,7 +264,6 @@ function IbcSendBackTx({ token, chainID }: Props) {
 
   function renderForm() {
     return (
-      // @ts-expect-error
       <Tx {...tx}>
         {({ max, fee, submit }) => (
           <Form onSubmit={handleSubmit(submit.fn)}>

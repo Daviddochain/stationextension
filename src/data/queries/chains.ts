@@ -18,24 +18,20 @@ type Whitelist = Record<
 
 type IBCDenoms = Record<
   string,
-  Record<
-    string,
-    {
-      token: string
-      chain: string
-      chainID?: string
-      icsChannel?: string
-    }
-  >
+  {
+    token: string
+    chain: string
+    chainID?: string
+    icsChannel?: string
+  }
 >
 
 export interface WhitelistData {
-  whitelist: Record<string, Whitelist>
+  whitelist: Whitelist
   ibcDenoms: IBCDenoms
   legacyWhitelist: Whitelist
 }
 
-// chains and token whitelist are always required from the beginning.
 const [useFetchedData, WhitelistProvider] =
   createContext<WhitelistData>("useWhitelist")
 export { WhitelistProvider }
@@ -82,7 +78,7 @@ export function useIBCChannels() {
     }: {
       from: string
       to: string
-      tokenAddress: AccAddress
+      tokenAddress: string
       icsChannel?: string
     }): string | undefined => {
       const isCW20 = AccAddress.validate(tokenAddress)

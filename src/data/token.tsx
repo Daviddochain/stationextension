@@ -1,6 +1,5 @@
 import { ReactNode } from "react"
-import { isDenomIBC } from "@terra-money/terra-utils"
-import { readDenom, truncate } from "@terra-money/terra-utils"
+import { isDenomIBC, readDenom, truncate } from "@terra-money/terra-utils"
 import { AccAddress } from "@terra-money/feather.js"
 import { ASSETS } from "config/constants"
 import { useTokenInfoCW20 } from "./queries/wasm"
@@ -12,7 +11,7 @@ import {
 } from "./external/osmosis"
 import { useCW20Whitelist, useIBCWhitelist } from "./Terra/TerraAssets"
 import { useWhitelist } from "./queries/chains"
-import { useNetworkName, useNetwork } from "./wallet"
+import { useNetwork } from "./wallet"
 import { getChainIDFromAddress } from "utils/bech32"
 
 export const DEFAULT_NATIVE_DECIMALS = 6
@@ -23,34 +22,24 @@ export const useTokenItem = (
 ): TokenItem | undefined => {
   const readNativeDenom = useNativeDenoms()
 
-  /* CW20 */
   const matchToken = (item: TokenItem) => item.token === token
 
-  // 1. Local storage
   const { list } = useCustomTokensCW20()
   const customTokenItem = list.find(matchToken)
 
-  // 2. Whitelist
   const cw20WhitelistResult = useCW20Whitelist(!!customTokenItem)
   const { data: cw20Whitelist = {} } = cw20WhitelistResult
   const listedCW20TokenItem = Object.values(cw20Whitelist ?? {}).find(
     matchToken
   )
 
-  // 3. Contract query - token info
   const shouldQueryCW20 = cw20WhitelistResult.isSuccess && !listedCW20TokenItem
   const tokenInfoResult = useTokenInfoCW20(token, shouldQueryCW20)
   const { data: tokenInfo } = tokenInfoResult
   const tokenInfoItem = tokenInfo ? { token, ...tokenInfo } : undefined
 
-  /* IBC */
-  // 1. Whitelist
   const { data: ibcWhitelist = {} } = useIBCWhitelist()
   const listedIBCTokenItem = ibcWhitelist[token.replace("ibc/", "")]
-
-  // 2. Query denom trace
-  //const shouldQueryIBC = ibcWhitelistState.isSuccess && !listedIBCTokenItem
-  //const { data: base_denom } = useIBCBaseDenom(token, shouldQueryIBC)
 
   if (AccAddress.validate(token)) {
     return customTokenItem ?? listedCW20TokenItem ?? tokenInfoItem
@@ -80,7 +69,6 @@ export const WithTokenItem = ({ token, chainID, children }: Props) => {
   return <>{children(readNativeDenom(token, chainID))}</>
 }
 
-/* helpers */
 export const getIcon = (path: string) => `${ASSETS}/icon/svg/${path}`
 
 export enum TokenType {
@@ -93,22 +81,19 @@ export enum TokenType {
 export const useNativeDenoms = () => {
   const { whitelist, ibcDenoms } = useWhitelist()
   const { list: cw20 } = useCustomTokensCW20()
-  const networkName = useNetworkName()
   const networks = useNetwork()
   const gammTokens = useGammTokens()
-
-  let decimals = DEFAULT_NATIVE_DECIMALS
 
   function readNativeDenom(
     denom: Denom,
     chainID?: string
   ): TokenItem & { isNonWhitelisted?: boolean } {
     let tokenType = ""
-    if (denom.startsWith("ibc/")) {
-      tokenType = TokenType.IBC
-    } else if (denom.startsWith("factory/")) {
-      tokenType = TokenType.FACTORY
-    } else if (denom.startsWith("gamm/")) {
+    let decimals = DEFAULT_NATIVE_DECIMALS
+
+    if (denom.startsWith("ibc/")) tokenType = TokenType.IBC
+    else if (denom.startsWith("factory/")) tokenType = TokenType.FACTORY
+    else if (denom.startsWith("gamm/")) {
       tokenType = TokenType.GAMM
       decimals = GAMM_TOKEN_DECIMALS
     } else if (
@@ -128,14 +113,11 @@ export const useNativeDenoms = () => {
         fixedDenom = gammTokens.get(denom) ?? readDenom(denom)
         break
 
-      case TokenType.FACTORY:
-        const factoryParts = denom.split(/[/:]/)
-        let tokenAddress = ""
-        if (factoryParts.length >= 2) {
-          tokenAddress = factoryParts.slice(2).join(" ")
-        }
-        fixedDenom = tokenAddress
+      case TokenType.FACTORY: {
+        const parts = denom.split(/[/:]/)
+        fixedDenom = parts.length >= 2 ? parts.slice(2).join(" ") : denom
         break
+      }
 
       case TokenType.STRIDE:
         fixedDenom = `st${denom.replace("stu", "").toUpperCase()}`
@@ -145,12 +127,13 @@ export const useNativeDenoms = () => {
         fixedDenom = readDenom(denom) || denom
     }
 
-    let factoryIcon
+    let factoryIcon: string | undefined
+
     if (tokenType === TokenType.FACTORY) {
       const tokenAddress = denom.split(/[/:]/)[1]
-      const chainID = getChainIDFromAddress(tokenAddress, networks)
-      if (chainID) {
-        factoryIcon = networks[chainID].icon
+      const detectedChainID = getChainIDFromAddress(tokenAddress, networks)
+      if (detectedChainID) {
+        factoryIcon = networks[detectedChainID]?.icon
       }
     }
 
@@ -158,41 +141,41 @@ export const useNativeDenoms = () => {
       factoryIcon = OSMO_ICON
     }
 
-    // native token
+    // whitelist match
     if (chainID) {
       const tokenID = `${chainID}:${denom}`
-
-      if (whitelist[networkName]?.[tokenID])
-        return whitelist[networkName]?.[tokenID]
+      if (whitelist[tokenID]) return whitelist[tokenID]
     } else {
-      const tokenDetails = Object.values(whitelist[networkName] ?? {}).find(
+      const tokenDetails = Object.values(whitelist ?? {}).find(
         ({ token }) => token === denom
       )
       if (tokenDetails) return tokenDetails
     }
 
-    // ibc token
-    let ibcToken = chainID
-      ? ibcDenoms[networkName]?.[`${chainID}:${denom}`]
-      : Object.entries(ibcDenoms[networkName] ?? {}).find(
+    // ibc match SAFE
+    const ibcToken = chainID
+      ? ibcDenoms?.[`${chainID}:${denom}`]
+      : Object.entries(ibcDenoms ?? {}).find(
           ([k]) => k.split(":")[1] === denom
         )?.[1]
 
     if (
       ibcToken &&
-      whitelist[networkName][ibcToken?.token] &&
-      (!chainID || ibcToken?.chainID === chainID)
+      ibcToken.token &&
+      whitelist[ibcToken.token] &&
+      (!chainID || ibcToken.chainID === chainID)
     ) {
       return {
-        ...whitelist[networkName][ibcToken?.token],
+        ...whitelist[ibcToken.token],
         type: tokenType,
         // @ts-expect-error
-        chains: [ibcToken?.chainID],
+        chains: [ibcToken.chainID],
       }
     }
 
+    // LUNA / LUNC split
     if (denom === "uluna") {
-      if (chainID === "columbus-5" || (!chainID && networkName === "classic")) {
+      if (chainID === "columbus-5") {
         return {
           token: denom,
           symbol: "LUNC",
@@ -201,7 +184,7 @@ export const useNativeDenoms = () => {
           decimals: 6,
           isNonWhitelisted: false,
         }
-      } else if (chainID === "phoenix-1" || chainID === "pisco-1") {
+      } else {
         return {
           token: denom,
           symbol: "LUNA",
@@ -214,12 +197,11 @@ export const useNativeDenoms = () => {
     }
 
     const CHAIN_ICON =
-      networks[chainID ?? ""]?.icon ||
+      networks?.[chainID ?? ""]?.icon ||
       "https://assets.terraclassic.community/icon/svg/Terra.svg"
 
     return (
       cw20.find(({ token }) => denom === token) ?? {
-        // default token icon
         token: denom,
         symbol: fixedDenom,
         name: fixedDenom,
@@ -229,7 +211,8 @@ export const useNativeDenoms = () => {
             ? "https://assets.terraclassic.community/icon/svg/IBC.svg"
             : tokenType === TokenType.STRIDE
             ? "https://station-assets.terraclassic.community/img/chains/Stride.png"
-            : (tokenType === TokenType.FACTORY || TokenType.GAMM) &&
+            : (tokenType === TokenType.FACTORY ||
+                tokenType === TokenType.GAMM) &&
               factoryIcon) || CHAIN_ICON,
         decimals,
         isNonWhitelisted: true,

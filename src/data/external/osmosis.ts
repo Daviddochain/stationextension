@@ -24,16 +24,9 @@ interface IOsmosisPoolAsset {
 }
 
 interface IOsmosisPoolResponse {
-  // pool_id: pool asset array
   [key: string]: IOsmosisPoolAsset[]
 }
 
-/**
- * Map token name to gamm denoms
- * e.g. gamm/pool/1 -> ATOM-OSMO LP
- *
- * @returns a map of token name strings indexed by gamm denom
- */
 export const useGammTokens = () => {
   const fetch = useQuery(
     [queryKey.gammTokens],
@@ -41,25 +34,31 @@ export const useGammTokens = () => {
       try {
         const { data } = await request.get<IOsmosisPoolResponse>(
           "/pools/v2/all?low_liquidity=true",
-          { baseURL: OSMOSIS_API_URL }
+          { baseURL: OSMOSIS_API_URL, timeout: 8000 }
         )
+
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          return {}
+        }
+
         return data
       } catch (error) {
-        console.error(error)
-        return
+        console.warn("useGammTokens: failed to load Osmosis pool data")
+        return {}
       }
     },
     {
-      // Data will never become stale and always stay in cache
       cacheTime: Infinity,
       staleTime: Infinity,
+      retry: false,
+      refetchOnWindowFocus: false,
     }
   )
 
   const gammTokens = new Map<string, string>()
 
   if (fetch.data) {
-    for (const [poolId, poolAsset] of Object.entries(fetch.data) ?? {}) {
+    for (const [poolId, poolAsset] of Object.entries(fetch.data)) {
       gammTokens.set(
         "gamm/pool/" + poolId,
         poolAsset.map((asset) => asset.symbol).join("-") + " LP"

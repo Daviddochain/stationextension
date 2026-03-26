@@ -8,9 +8,15 @@ const useToPostMultisigTx = () => {
   const lcd = useInterchainLCDClient()
 
   return (tx: UnsignedTx) => {
+    if (!lcd) throw new Error("LCD client is not available")
+
     const pathname = "/multisig/post"
     const encodedTx = lcd.tx.encode(tx)
-    return { pathname, search: qs.stringify({ address, tx: encodedTx }) }
+
+    return {
+      pathname,
+      search: qs.stringify({ address, tx: encodedTx }),
+    }
   }
 }
 

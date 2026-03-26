@@ -15,7 +15,7 @@ import {
   useCustomTokensNative,
 } from "data/settings/CustomTokens"
 import { useIBCBaseDenoms } from "data/queries/ibc"
-import { useNetwork, useNetworkName } from "data/wallet"
+import { useNetwork } from "data/wallet"
 import { ReactComponent as ManageAssets } from "styles/images/icons/ManageAssets.svg"
 
 const AssetList = () => {
@@ -23,7 +23,6 @@ const AssetList = () => {
   const isWalletEmpty = useIsWalletEmpty()
   const { hideNoWhitelist, hideLowBal } = useTokenFilters()
   const networks = useNetwork()
-  const networkName = useNetworkName()
 
   const coins = useBankBalance()
   const { data: prices } = useExchangeRates()
@@ -35,13 +34,13 @@ const AssetList = () => {
     () =>
       new Set([
         ...cw20.list.map((a) => a.token),
-        ...native.list.map((a) => a.denom),
+        ...native.list.map((a: any) => a.denom ?? a.id),
       ]),
     [cw20.list, native.list]
   )
 
   const unknownIBCDenomsData = useIBCBaseDenoms(
-    coins
+    (coins ?? [])
       .map(({ denom, chain }) => ({ denom, chainID: chain }))
       .filter(({ denom, chainID }) => {
         const data = readNativeDenom(denom, chainID)
@@ -49,7 +48,7 @@ const AssetList = () => {
       })
   )
 
-  const unknownIBCDenoms = unknownIBCDenomsData.reduce(
+  const unknownIBCDenoms = (unknownIBCDenomsData ?? []).reduce(
     (acc, { data }) =>
       data
         ? {
@@ -58,8 +57,8 @@ const AssetList = () => {
               "*"
             )]: {
               baseDenom: data.baseDenom,
-              chainID: data?.chainIDs[0],
-              chainIDs: data?.chainIDs,
+              chainID: data.chainIDs[0],
+              chainIDs: data.chainIDs,
             },
           }
         : acc,
@@ -73,7 +72,7 @@ const AssetList = () => {
     () =>
       [
         ...Object.values(
-          coins.reduce((acc, { denom, amount, chain }) => {
+          (coins ?? []).reduce((acc, { denom, amount, chain }) => {
             const ibcKey = [denom, chain].join("*")
             const ibcInfo = unknownIBCDenoms[ibcKey]
 
@@ -90,6 +89,20 @@ const AssetList = () => {
 
             const key = [assetChainID, data.token].join("*")
 
+            const priceKey =
+              data.token === "uluna"
+                ? assetChainID === "columbus-5"
+                  ? "uluna:classic"
+                  : assetChainID === "phoenix-1" || assetChainID === "pisco-1"
+                  ? "uluna:phoenix"
+                  : data.token
+                : `${assetChainID}:${data.token}`
+
+            const price =
+              prices?.[priceKey]?.price ?? prices?.[data.token]?.price ?? 0
+            const change =
+              prices?.[priceKey]?.change ?? prices?.[data.token]?.change ?? 0
+
             if (acc[key]) {
               acc[key].balance = `${
                 Number(acc[key].balance ?? "0") + Number(amount ?? "0")
@@ -100,24 +113,6 @@ const AssetList = () => {
               return acc
             }
 
-            if (key === "columbus-5*uluna" && networkName !== "classic") {
-              return {
-                ...acc,
-                [key]: {
-                  denom: data.token,
-                  chainID: assetChainID,
-                  balance: amount,
-                  icon: "https://assets.terra.dev/icon/svg/LUNC.svg",
-                  symbol: "LUNC",
-                  price: prices?.["uluna:classic"]?.price ?? 0,
-                  change: prices?.["uluna:classic"]?.change ?? 0,
-                  chains: [chain],
-                  id: key,
-                  whitelisted: true,
-                },
-              }
-            }
-
             return {
               ...acc,
               [key]: {
@@ -126,8 +121,8 @@ const AssetList = () => {
                 balance: amount,
                 icon: data.icon,
                 symbol: data.symbol,
-                price: prices?.[data.token]?.price ?? 0,
-                change: prices?.[data.token]?.change ?? 0,
+                price,
+                change,
                 chains: [chain],
                 id: key,
                 whitelisted: !(
@@ -136,7 +131,7 @@ const AssetList = () => {
                 ),
               },
             }
-          }, {} as Record<string, any>) ?? {}
+          }, {} as Record<string, any>)
         ),
       ]
         .filter((a) => (hideNoWhitelist ? a.whitelisted : true))
@@ -163,12 +158,11 @@ const AssetList = () => {
       alwaysVisibleDenoms,
       unknownIBCDenoms,
       networks,
-      networkName,
     ]
   )
 
   const render = () => {
-    if (!coins) return
+    if (!coins) return null
 
     return (
       <div>
@@ -187,7 +181,7 @@ const AssetList = () => {
               )}
               id={id}
               {...item}
-              key={i}
+              key={id ?? i}
             />
           ))}
         </section>

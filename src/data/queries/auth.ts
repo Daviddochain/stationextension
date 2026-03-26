@@ -9,11 +9,16 @@ export const useAccountInfo = () => {
   const lcd = useInterchainLCDClient()
 
   return useQuery(
-    [queryKey.auth.accountInfo],
+    [queryKey.auth.accountInfo, address],
     async () => {
       if (!address) throw new Error("Wallet is not connected")
+      if (!lcd) throw new Error("LCD client is not available")
+
       return await lcd.auth.accountInfo(address)
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(address && lcd),
+    }
   )
 }

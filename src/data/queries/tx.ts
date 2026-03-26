@@ -30,16 +30,19 @@ export const useTxInfo = ({ txhash, queryKeys, chainID }: LatestTx) => {
   const lcd = useInterchainLCDClient()
 
   return useQuery(
-    [queryKey.tx.txInfo, txhash],
-    () => lcd.tx.txInfo(txhash, chainID),
+    [queryKey.tx.txInfo, txhash, chainID],
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.tx.txInfo(txhash, chainID)
+    },
     {
-      enabled: !!txhash,
+      enabled: Boolean(txhash && chainID && lcd),
       retry: true,
       retryDelay: 1000,
       onSettled: () => setIsBroadcasting(false),
       onSuccess: () => {
-        queryKeys?.forEach((queryKey) => {
-          queryClient.invalidateQueries(queryKey)
+        queryKeys?.forEach((queryKeyItem) => {
+          queryClient.invalidateQueries(queryKeyItem)
         })
 
         queryClient.invalidateQueries(queryKey.History)
@@ -58,6 +61,7 @@ export const useCarbonFees = () => {
         axios.get("carbon/fee/v1/gas_prices", { baseURL: CARBON_API }),
         axios.get("carbon/fee/v1/gas_costs", { baseURL: CARBON_API }),
       ])
+
       const prices = gasPrices.min_gas_prices.reduce((acc: any, p: any) => {
         acc[p.denom] = p.gas_price
         return acc

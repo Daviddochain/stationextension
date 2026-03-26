@@ -1,26 +1,37 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { SettingKey } from "utils/localStorage"
-import { getLocalSetting, setLocalSetting } from "utils/localStorage"
+import {
+  SettingKey,
+  getLocalSetting,
+  setLocalSetting,
+} from "utils/localStorage"
 import { Card, Page } from "components/layout"
 import { FormItem, Input } from "components/form"
 
 const Settings = () => {
   const { t } = useTranslation()
-  const [input, setInput] = useState(
-    String(getLocalSetting(SettingKey.GasAdjustment))
+
+  const [input, setInput] = useState<string>(() =>
+    String(getLocalSetting(SettingKey.GasAdjustment) ?? "1.5")
   )
 
   useEffect(() => {
     const value = Number(input)
-    if (value) setLocalSetting(SettingKey.GasAdjustment, value)
+
+    if (!isNaN(value) && value > 0) {
+      setLocalSetting(SettingKey.GasAdjustment, value)
+    }
   }, [input])
 
   return (
     <Page title={t("Settings")} small>
       <Card>
         <FormItem label="Gas adjustment">
-          <Input value={input} onChange={(e) => setInput(e.target.value)} />
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            inputMode="decimal"
+          />
         </FormItem>
       </Card>
     </Page>

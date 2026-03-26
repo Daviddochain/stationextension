@@ -1,4 +1,4 @@
-import { useQuery, useQueries, UseQueryResult } from "react-query"
+import { useQueries, useQuery, UseQueryResult } from "react-query"
 import { flatten, path, uniqBy } from "ramda"
 import BigNumber from "bignumber.js"
 import {
@@ -29,26 +29,31 @@ export const useInterchainValidators = () => {
   const lcd = useInterchainLCDClient()
 
   return useQueries(
-    Object.keys(addresses ?? {}).map((chainID) => {
+    Object.keys(addresses).map((chainID) => {
       return {
         queryKey: [queryKey.interchain.staking.validators, addresses, chainID],
         queryFn: async () => {
+          if (!lcd) return [] as Validator[]
+
           const result: Validator[] = []
           let key: string | null = ""
 
           do {
-            // @ts-expect-error
-            const [list, pagination] = await lcd.staking.validators(chainID, {
+            const response = await lcd.staking.validators(chainID, {
               "pagination.limit": "100",
               "pagination.key": key,
             })
+            const list = response[0] as Validator[]
+            const pagination = response[1] as { next_key?: string | null }
 
             result.push(...list)
-            key = pagination?.next_key
+            key = pagination?.next_key ?? null
           } while (key)
 
           return uniqBy(path(["operator_address"]), result)
         },
+        enabled: Boolean(chainID && lcd),
+        ...RefetchOptions.INFINITY,
       }
     })
   )
@@ -60,23 +65,29 @@ export const useValidators = (chainID: string) => {
   return useQuery(
     [queryKey.staking.validators, chainID],
     async () => {
+      if (!lcd) return [] as Validator[]
+
       const result: Validator[] = []
       let key: string | null = ""
 
       do {
-        // @ts-expect-error
-        const [list, pagination] = await lcd.staking.validators(chainID, {
+        const response = await lcd.staking.validators(chainID, {
           "pagination.limit": "100",
           "pagination.key": key,
         })
+        const list = response[0] as Validator[]
+        const pagination = response[1] as { next_key?: string | null }
 
         result.push(...list)
-        key = pagination?.next_key
+        key = pagination?.next_key ?? null
       } while (key)
 
       return uniqBy(path(["operator_address"]), result)
     },
-    { ...RefetchOptions.INFINITY }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(chainID && lcd),
+    }
   )
 }
 
@@ -85,10 +96,14 @@ export const useInterchainDelegations = () => {
   const lcd = useInterchainLCDClient()
 
   return useQueries(
-    Object.keys(addresses ?? {}).map((chainID) => {
+    Object.keys(addresses).map((chainID) => {
       return {
         queryKey: [queryKey.interchain.staking.delegations, addresses, chainID],
         queryFn: async () => {
+          if (!lcd || !addresses[chainID]) {
+            return { delegation: [] as Delegation[], chainID }
+          }
+
           const [delegations] = await lcd.staking.delegations(
             addresses[chainID],
             undefined,
@@ -103,6 +118,8 @@ export const useInterchainDelegations = () => {
 
           return { delegation, chainID }
         },
+        enabled: Boolean(addresses[chainID] && lcd),
+        ...RefetchOptions.DEFAULT,
       }
     })
   )
@@ -110,19 +127,33 @@ export const useInterchainDelegations = () => {
 
 export const useValidator = (operatorAddress: ValAddress) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.staking.validator, operatorAddress],
-    () => lcd.staking.validator(operatorAddress),
-    { ...RefetchOptions.INFINITY }
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.staking.validator(operatorAddress)
+    },
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(operatorAddress && lcd),
+    }
   )
 }
 
 export const useStakingParams = (chainID: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.staking.params, chainID],
-    () => lcd.staking.parameters(chainID),
-    { ...RefetchOptions.INFINITY }
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.staking.parameters(chainID)
+    },
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(chainID && lcd),
+    }
   )
 }
 
@@ -134,11 +165,10 @@ export const useDelegations = (chainID: string) => {
   const lcd = useInterchainLCDClient()
 
   return useQuery(
-    [queryKey.staking.delegations, addresses?.[chainID]],
+    [queryKey.staking.delegations, addresses?.[chainID], chainID],
     async () => {
-      if (!addresses || !addresses[chainID]) return []
-      // TODO: Pagination
-      // Required when the number of results exceed LAZY_LIMIT
+      if (!addresses || !addresses[chainID] || !lcd) return []
+
       const [delegations] = await lcd.staking.delegations(
         addresses[chainID],
         undefined,
@@ -147,7 +177,10 @@ export const useDelegations = (chainID: string) => {
 
       return delegations.filter(({ balance }) => has(balance.amount.toString()))
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(addresses?.[chainID] && lcd),
+    }
   )
 }
 
@@ -158,12 +191,15 @@ export const useDelegation = (validatorAddress: ValAddress) => {
   return useQuery(
     [queryKey.staking.delegation, addresses, validatorAddress],
     async () => {
-      if (!addresses) return
+      if (!addresses || !lcd) return
+
       const prefix = ValAddress.getPrefix(validatorAddress)
-      const address = Object.values(addresses ?? {}).find(
+      const address = Object.values(addresses).find(
         (a) => AccAddress.getPrefix(a as string) === prefix
       )
+
       if (!address) return
+
       try {
         const delegation = await lcd.staking.delegation(
           address as string,
@@ -174,7 +210,10 @@ export const useDelegation = (validatorAddress: ValAddress) => {
         return
       }
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(addresses && validatorAddress && lcd),
+    }
   )
 }
 
@@ -183,15 +222,22 @@ export const useInterchainUnbondings = () => {
   const lcd = useInterchainLCDClient()
 
   return useQueries(
-    Object.keys(addresses ?? {}).map((chainID) => {
+    Object.keys(addresses).map((chainID) => {
       return {
         queryKey: [queryKey.interchain.staking.unbondings, addresses, chainID],
         queryFn: async () => {
+          if (!lcd || !addresses[chainID]) {
+            return [] as UnbondingDelegation[]
+          }
+
           const [unbondings] = await lcd.staking.unbondingDelegations(
             addresses[chainID]
           )
+
           return unbondings
         },
+        enabled: Boolean(addresses[chainID] && lcd),
+        ...RefetchOptions.DEFAULT,
       }
     })
   )
@@ -204,24 +250,33 @@ export const useUnbondings = (chainID: string) => {
   return useQuery(
     [queryKey.staking.unbondings, addresses, chainID],
     async () => {
-      if (!addresses || !addresses[chainID]) return []
-      // Pagination is not required because it is already limited
+      if (!addresses || !addresses[chainID] || !lcd) return []
+
       const [unbondings] = await lcd.staking.unbondingDelegations(
         addresses[chainID]
       )
+
       return unbondings
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(addresses?.[chainID] && lcd),
+    }
   )
 }
 
 export const useStakingPool = (chainID: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.staking.pool, chainID],
-    () => lcd.staking.pool(chainID),
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.staking.pool(chainID)
+    },
     {
       ...RefetchOptions.INFINITY,
+      enabled: Boolean(chainID && lcd),
     }
   )
 }
@@ -307,6 +362,9 @@ export const useCalcInterchainDelegationsTotal = (
 
               if (!delegationsByChain[result.data?.chainID]) {
                 delegationsByChain[result.data?.chainID] = {}
+              }
+
+              if (!delegationsByChain[result.data?.chainID][balance.denom]) {
                 delegationsByChain[result.data?.chainID][balance.denom] = {
                   value: 0,
                   amount: 0,
@@ -336,6 +394,7 @@ export const useCalcInterchainDelegationsTotal = (
   })
 
   const tableDataByChain = {} as any
+
   Object.keys(delegationsByChain ?? {}).forEach((chainName) => {
     tableDataByChain[chainName] = Object.keys(
       delegationsByChain[chainName] ?? {}
@@ -445,7 +504,7 @@ export const useCalcDelegationsByValidator = (
   })
 
   interchainValidators.forEach((response) => {
-    if (response.status === "success") {
+    if (response.status === "success" && response.data?.length) {
       const addressChainId =
         getChainIdFromAddress(response.data[0]?.operator_address, networks) ||
         ""
@@ -458,26 +517,34 @@ export const useCalcDelegationsByValidator = (
   Object.keys(validatorByChain ?? {}).forEach((chainName) => {
     const delegationsDataComplete = Object.keys(
       validatorByChain[chainName] ?? {}
-    ).map((validator) => {
-      if (!allValidatorByChain[chainName]) {
-        return undefined
-      }
-      const { description } = getFindValidator(allValidatorByChain[chainName])(
-        validator
-      )
-      return {
-        address: validator,
-        moniker: description.moniker,
-        identity: description.identity,
-        value: validatorByChain[chainName][validator].value,
-        amount: validatorByChain[chainName][validator].amount,
-        denom: validatorByChain[chainName][validator].denom,
-      }
-    })
+    )
+      .map((validator) => {
+        if (!allValidatorByChain[chainName]) {
+          return undefined
+        }
+
+        try {
+          const { description } = getFindValidator(
+            allValidatorByChain[chainName]
+          )(validator)
+          return {
+            address: validator,
+            moniker: description.moniker,
+            identity: description.identity,
+            value: validatorByChain[chainName][validator].value,
+            amount: validatorByChain[chainName][validator].amount,
+            denom: validatorByChain[chainName][validator].denom,
+          }
+        } catch {
+          return undefined
+        }
+      })
+      .filter(Boolean)
 
     const sortedValis = delegationsDataComplete.sort(
       (a, b) => (b?.value ?? 0) - (a?.value ?? 0)
     )
+
     if (sortedValis.length <= 4) {
       tableDataByChain[chainName] = sortedValis
     } else {
@@ -519,10 +586,11 @@ export const getPriorityVals = (validators: Validator[]) => {
   const VOTE_POWER_INCLUDE = 0.65
 
   const totalStaked = getTotalStakedTokens(validators)
-  const getVotePower = (v: Validator) => Number(v.tokens) / totalStaked
+  const getVotePower = (v: Validator) =>
+    totalStaked ? Number(v.tokens) / totalStaked : 0
 
   return validators
-    .sort((a, b) => getVotePower(a) - getVotePower(b)) // least to greatest
+    .sort((a, b) => getVotePower(a) - getVotePower(b))
     .reduce(
       (acc, cur) => {
         acc.sumVotePower += getVotePower(cur)
@@ -556,6 +624,7 @@ export const getQuickStakeMsgs = (
 ) => {
   const { denom, amount } = coin.toData()
   const totalAmt = new BigNumber(amount)
+
   const isLessThanAmt = (amt: number) =>
     totalAmt.isLessThan(toAmount(amt, { decimals }))
 
@@ -577,6 +646,7 @@ export const getQuickStakeMsgs = (
         new Coin(denom, totalAmt.dividedToIntegerBy(destVals.length).toString())
       )
   )
+
   return msgs
 }
 
@@ -593,6 +663,7 @@ export const getQuickUnstakeMsgs = (
   for (const delegation of delegations) {
     const { balance, validator_address } = delegation
     const delAmt = new BigNumber(balance.amount.toString())
+
     msgs.push(
       new MsgUndelegate(
         address,
@@ -603,11 +674,13 @@ export const getQuickUnstakeMsgs = (
         )
       )
     )
+
     if (remaining.lt(delAmt)) {
       remaining = new BigNumber(0)
     } else {
       remaining = remaining.minus(delAmt)
     }
+
     if (remaining.isZero()) {
       break
     }

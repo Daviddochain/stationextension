@@ -9,7 +9,7 @@ import styles from "./HistoryItem.module.scss"
 import DateRangeIcon from "@mui/icons-material/DateRange"
 import GppGoodIcon from "@mui/icons-material/GppGood"
 import GroupIcon from "@mui/icons-material/Group"
-import { useNetwork, useNetworkName } from "data/wallet"
+import { useNetwork } from "data/wallet"
 import {
   createActionRuleSet,
   createLogMatcherForActions,
@@ -34,10 +34,10 @@ const HistoryItem = ({
     },
     raw_log,
   } = props
+
   const success = code === 0
   const { t } = useTranslation()
   const network = useNetwork()
-  const networkName = useNetworkName()
 
   const data = [
     { title: t("Fee"), content: <ReadMultiple list={fee} /> },
@@ -45,8 +45,9 @@ const HistoryItem = ({
     { title: t("Log"), content: !success && raw_log },
   ]
 
-  const ruleset = createActionRuleSet(networkName)
+  const ruleset = createActionRuleSet(chain)
   const logMatcher = createLogMatcherForActions(ruleset)
+
   const getCanonicalMsgs = (txInfo: TxInfo) => {
     const matchedMsg = getTxCanonicalMsgs(txInfo, logMatcher)
     return matchedMsg
@@ -61,8 +62,8 @@ const HistoryItem = ({
       <header className={styles.header}>
         <p className={styles.txhash}>
           <span className={styles.chain}>
-            <img src={network[chain].icon} alt={chain} />
-            {network[chain].name}
+            <img src={network[chain]?.icon} alt={chain} />
+            {network[chain]?.name ?? chain}
           </span>
           <span className={styles.link}>
             <FinderLink chainID={chain} tx short>
@@ -86,10 +87,6 @@ const HistoryItem = ({
             msg && <HistoryMessage msg={msg} success={success} key={index} />
         )}
       </div>
-
-      {
-        //collapsed && <small>{t("{{collapsed}} more", { collapsed })}</small>
-      }
 
       <footer className={styles.footer}>
         <Dl>

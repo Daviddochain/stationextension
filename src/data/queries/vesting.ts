@@ -129,7 +129,8 @@ export const parseVestingSchedule = (
       const end = new Date(start.getTime() + Number(length) * 1000)
       const toNow = isFuture(start) ? "future" : isPast(end) ? "past" : "now"
       const amount = getLunaAmount(coins)
-      const ratio = Number(amount) / Number(total)
+      const ratio = Number(total) ? Number(amount) / Number(total) : 0
+
       return [...acc, { start, end, toNow, amount, ratio }]
     },
     []
@@ -159,12 +160,22 @@ export const useAccount = () => {
   const chainID = useChainID()
   const lcd = useInterchainLCDClient()
 
-  return useQuery(["accounts", address], async () => {
-    if (!address) return null
-    return await queryAccounts(address, lcd.config[chainID].lcd)
-  })
+  return useQuery(
+    ["accounts", address, chainID],
+    async () => {
+      if (!address || !chainID || !lcd) return null
+
+      const chainConfig = lcd.config?.[chainID]
+      if (!chainConfig?.lcd) return null
+
+      return await queryAccounts(address, chainConfig.lcd)
+    },
+    {
+      enabled: Boolean(address && chainID && lcd?.config?.[chainID]?.lcd),
+    }
+  )
 }
 
 export const isVestingAccount = (data: any) => {
-  return Object.values(VestingAccountTypes ?? {}).includes(data["@type"])
+  return Object.values(VestingAccountTypes ?? {}).includes(data?.["@type"])
 }

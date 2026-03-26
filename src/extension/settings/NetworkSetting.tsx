@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { useNetworkState } from "data/wallet"
 import { useNetworks } from "app/InitNetworks"
 import { RadioGroup } from "components/form"
+import { InterchainNetwork } from "types/network"
 
 const NetworkSetting = () => {
   const [network, setNetwork] = useNetworkState()
@@ -10,20 +11,13 @@ const NetworkSetting = () => {
   const flatOptions = useMemo(() => {
     if (!networks) return []
 
-    // Order how you want chains shown
-    const order = ["classic", "mainnet"] as const
+    const list = Object.values(
+      networks as Record<string, InterchainNetwork>
+    ).map((chain) => ({
+      label: chain.name,
+      value: chain.chainID,
+    }))
 
-    const list = order.flatMap((groupName) => {
-      const group = networks[groupName]
-      if (!group) return []
-
-      return Object.values(group).map((chain) => ({
-        label: chain.name,
-        value: groupName, // IMPORTANT: still maps to group
-      }))
-    })
-
-    // remove duplicates by label
     const seen = new Set<string>()
     return list.filter((item) => {
       if (seen.has(item.label)) return false
@@ -38,7 +32,7 @@ const NetworkSetting = () => {
     <RadioGroup
       options={flatOptions}
       value={network}
-      onChange={(value) => setNetwork(value as any)}
+      onChange={(value) => setNetwork(value as string)}
     />
   )
 }

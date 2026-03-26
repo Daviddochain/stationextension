@@ -56,6 +56,8 @@ const SelectAddress = () => {
   const { data: results } = useQuery(
     ["mnemonic", seed, index],
     async () => {
+      if (!lcd) return []
+
       const results = await Promise.allSettled(
         ADDRESS_OPTIONS.map(async (option) => {
           const mk = new SeedKey({
@@ -103,6 +105,7 @@ const SelectAddress = () => {
         .map((result) => result.value)
     },
     {
+      enabled: !!lcd,
       onSuccess: (results) => {
         const dungeon118 = results.find((item) => item.id === "dungeon-118")
         if (!dungeon118) return

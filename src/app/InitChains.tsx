@@ -25,7 +25,7 @@ const normalizeAssetUrl = (url?: string) => {
   return url
 }
 
-const normalizeTokenMap = <T extends Record<string, any>>(obj?: T): T => {
+const normalizeTokenRecord = <T extends Record<string, any>>(obj?: T): T => {
   return Object.fromEntries(
     Object.entries(obj ?? {}).map(([key, value]) => [
       key,
@@ -39,13 +39,25 @@ const normalizeTokenMap = <T extends Record<string, any>>(obj?: T): T => {
   ) as T
 }
 
-const normalizeNestedTokenMap = <T extends Record<string, any>>(obj?: T): T => {
-  return Object.fromEntries(
-    Object.entries(obj ?? {}).map(([network, items]) => [
-      network,
-      normalizeTokenMap(items as Record<string, any>),
-    ])
-  ) as T
+const denomsArrayToWhitelist = (denoms: any[]): WhitelistData["whitelist"] => {
+  return (denoms ?? []).reduce((acc, item) => {
+    if (!item || typeof item !== "object") return acc
+
+    const chainID = item.chainID ?? item.chain
+    const token = item.token ?? item.denom
+
+    if (!chainID || !token) return acc
+
+    const tokenID = `${chainID}:${token}`
+
+    acc[tokenID] = {
+      ...item,
+      token,
+      icon: normalizeAssetUrl(item.icon),
+    }
+
+    return acc
+  }, {} as WhitelistData["whitelist"])
 }
 
 const InitChains = ({ children }: PropsWithChildren<{}>) => {
@@ -56,14 +68,32 @@ const InitChains = ({ children }: PropsWithChildren<{}>) => {
   useEffect(() => {
     axios
       .get("/denoms.json", { baseURL: STATION_ASSETS })
-      .then(({ data }) => setWhitelist(normalizeNestedTokenMap(data)))
+      .then(({ data }) => {
+        if (Array.isArray(data)) {
+          setWhitelist(denomsArrayToWhitelist(data))
+        } else if (data && typeof data === "object") {
+          setWhitelist(normalizeTokenRecord(data))
+        } else {
+          console.error("InitChains: unexpected denoms.json format", data)
+          setWhitelist({})
+        }
+      })
       .catch((error) =>
         console.error("InitChains: failed to fetch denoms.json", error)
       )
 
     axios
       .get("/ibc_tokens.json", { baseURL: STATION_ASSETS })
-      .then(({ data }) => setIbcDenoms(normalizeNestedTokenMap(data)))
+      .then(({ data }) => {
+        // support BOTH flat and { all: ... } formats
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          const resolved = data.all ?? data
+          setIbcDenoms(normalizeTokenRecord(resolved))
+        } else {
+          console.error("InitChains: unexpected ibc_tokens.json format", data)
+          setIbcDenoms({})
+        }
+      })
       .catch((error) =>
         console.error("InitChains: failed to fetch ibc_tokens.json", error)
       )

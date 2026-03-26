@@ -66,6 +66,9 @@ const PostMultisigTxForm = ({ publicKey, sequence, ...props }: Props) => {
     setError(undefined)
 
     try {
+      if (!lcd) throw new Error("LCD client is not available")
+      if (!chainID) throw new Error("Chain ID is not available")
+
       const tx = lcd.tx.decode(encoded.trim())
       if (!tx) throw new Error("Invalid tx")
 

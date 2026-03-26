@@ -2,8 +2,7 @@ import { useCallback } from "react"
 import BigNumber from "bignumber.js"
 import { fromPairs, zipObj } from "ramda"
 import { Coin, Coins, MsgExecuteContract } from "@terra-money/feather.js"
-import { isDenom, isDenomLuna } from "@terra-money/terra-utils"
-import { isDenomTerra } from "@terra-money/terra-utils"
+import { isDenom, isDenomLuna, isDenomTerra } from "@terra-money/terra-utils"
 import { TERRASWAP_COMMISSION_RATE } from "config/constants"
 import { has, toPrice } from "utils/num"
 import { toAsset, toAssetInfo, toTokenItem } from "utils/coin"
@@ -45,8 +44,8 @@ export interface SimulateResult<T = any> {
   payload: T
 }
 
-export type PayloadOnchain = Amount // spread
-export type PayloadTerraswap = Amount // fee
+export type PayloadOnchain = Amount
+export type PayloadTerraswap = Amount
 export type PayloadRouteswap = string[]
 
 const useSwapUtils = () => {
@@ -56,7 +55,6 @@ const useSwapUtils = () => {
   const { pairs, contracts } = context
 
   /* helpers */
-  // terraswap
   const findPair = useCallback(
     (assets: SwapAssets, dex: Dex) => {
       const { offerAsset, askAsset } = assets
@@ -90,7 +88,6 @@ const useSwapUtils = () => {
       if (getIsTerraswapAvailable(assets)) return false
 
       const r0 = getIsTerraswapAvailable({ ...assets, askAsset: "uusd" })
-
       const r1 = getIsTerraswapAvailable({ ...assets, offerAsset: "uusd" })
 
       return r0 && r1
@@ -118,10 +115,10 @@ const useSwapUtils = () => {
   const getIsSwapAvailable = (assets: Partial<SwapAssets>) =>
     !!getAvailableSwapModes(assets).length
 
-  /* swap mode for multiple swap */
   const getSwapMode = useCallback(
     (assets: SwapAssets) => {
       const { askAsset } = assets
+
       if (isDenomLuna(askAsset)) {
         return getIsTerraswapAvailable(assets)
           ? SwapMode.TERRASWAP
@@ -131,7 +128,6 @@ const useSwapUtils = () => {
     [getIsTerraswapAvailable]
   )
 
-  /* simulate | execute */
   type SimulateFn<T = any> = (params: SwapParams) => Promise<SimulateResult<T>>
 
   const getTerraswapParams = useCallback(
@@ -142,23 +138,28 @@ const useSwapUtils = () => {
       const offer_asset = toAsset(offerAsset, amount)
 
       if (!pair) throw new Error("Pair does not exist")
+
       const contract = fromNative ? pair.address : offerAsset
 
-      /* simulate */
       const query = { simulation: { offer_asset } }
 
-      /* execute */
       const swap =
         belief_price && max_spread ? { belief_price, max_spread } : {}
+
       const executeMsg = fromNative
         ? { swap: { ...swap, offer_asset } }
         : { send: { amount, contract: pair.address, msg: toBase64({ swap }) } }
+
       const coins = fromNative ? new Coins({ [offerAsset]: amount }) : undefined
       const msgs = address
         ? [new MsgExecuteContract(address, contract, executeMsg, coins)]
         : []
 
-      return { pair, simulation: { contract: pair.address, query }, msgs }
+      return {
+        pair,
+        simulation: { contract: pair.address, query },
+        msgs,
+      }
     },
     [address, findPair]
   )
@@ -167,50 +168,55 @@ const useSwapUtils = () => {
     params: SwapParams,
     dex: Dex = "terraswap"
   ) => {
+    if (!lcd) throw new Error("LCD client is not available")
+
     const mode = {
       terraswap: SwapMode.TERRASWAP,
       astroport: SwapMode.ASTROPORT,
     }[dex]
 
     const query = params
-
     const { amount } = params
     const { pair, simulation } = getTerraswapParams(params, dex)
 
     if (pair.type === "stable") {
-      const { return_amount: value, commission_amount } =
-        await lcd.wasm.contractQuery<{
-          return_amount: Amount
-          commission_amount: Amount
-        }>(pair.address, simulation.query)
+      const stableResponse = await lcd.wasm.contractQuery<{
+        return_amount: Amount
+        commission_amount: Amount
+      }>(pair.address, simulation.query)
 
+      const { return_amount: value, commission_amount } = stableResponse
       const payload = commission_amount
       const ratio = toPrice(new BigNumber(amount).div(value))
+
       return { mode, query, value, ratio, payload }
-    } else {
-      const { assets } = await lcd.wasm.contractQuery<{
-        assets: [Asset, Asset]
-      }>(simulation.contract, { pool: {} })
-
-      const { pool, rate } = parsePool(params, assets)
-      const { return_amount: value, commission_amount } = calcXyk(amount, pool)
-      const payload = commission_amount
-      const ratio = toPrice(new BigNumber(amount).div(value))
-      return { mode, query, value, ratio, rate, payload }
     }
+
+    const poolResponse = await lcd.wasm.contractQuery<{
+      assets: [Asset, Asset]
+    }>(simulation.contract, { pool: {} })
+
+    const { assets } = poolResponse
+    const { pool, rate } = parsePool(params, assets)
+    const { return_amount: value, commission_amount } = calcXyk(amount, pool)
+    const payload = commission_amount
+    const ratio = toPrice(new BigNumber(amount).div(value))
+
+    return { mode, query, value, ratio, rate, payload }
   }
 
   const getAstroportParams = getTerraswapParams
+
   const simulateAstroport = (params: SwapParams) =>
     simulateTerraswap(params, "astroport")
 
   const getRouteswapParams = useCallback(
     (params: SwapParams) => {
-      /* helper function */
       const createSwap = ({ offerAsset, askAsset }: SwapAssets) => {
         const offer_asset_info = toAssetInfo(offerAsset)
         const ask_asset_info = toAssetInfo(askAsset)
         const buyLuna = isDenomTerra(offerAsset) && isDenomLuna(askAsset)
+
         return buyLuna
           ? { terra_swap: { offer_asset_info, ask_asset_info } }
           : { native_swap: { offer_denom: offerAsset, ask_denom: askAsset } }
@@ -218,7 +224,10 @@ const useSwapUtils = () => {
 
       const { amount, offerAsset, askAsset, minimum_receive } = params
       const fromNative = isDenom(offerAsset)
-      if (!contracts?.routeswap) throw new Error("Routeswap is not available")
+
+      if (!contracts?.routeswap) {
+        throw new Error("Routeswap is not available")
+      }
 
       const route = [offerAsset, "uusd", askAsset]
       const operations = [
@@ -226,19 +235,18 @@ const useSwapUtils = () => {
         createSwap({ offerAsset: "uusd", askAsset }),
       ]
 
-      const options = minimum_receive && { minimum_receive }
+      const options = minimum_receive ? { minimum_receive } : {}
       const swapOperations = { ...options, offer_amount: amount, operations }
 
-      /* simulation */
       const simulation = { simulate_swap_operations: swapOperations }
       const execute = { execute_swap_operations: swapOperations }
 
-      /* msgs */
       const routeswap = contracts.routeswap
       const contract = fromNative ? routeswap : offerAsset
       const executeMsg = fromNative
         ? execute
         : { send: { contract: routeswap, msg: toBase64(execute), amount } }
+
       const coins = fromNative ? [new Coin(offerAsset, amount)] : undefined
       const msgs = address
         ? [new MsgExecuteContract(address, contract, executeMsg, coins)]
@@ -250,14 +258,17 @@ const useSwapUtils = () => {
   )
 
   const simulateRouteswap: SimulateFn<Token[]> = async (params: SwapParams) => {
+    if (!lcd) throw new Error("LCD client is not available")
     if (!contracts?.routeswap) throw new Error("Routeswap is not available")
 
     const { simulation, route } = getRouteswapParams(params)
-    const { amount: value } = await lcd.wasm.contractQuery<{ amount: string }>(
+
+    const routeswapResponse = await lcd.wasm.contractQuery<{ amount: string }>(
       contracts.routeswap,
       simulation
     )
 
+    const { amount: value } = routeswapResponse
     const ratio = toPrice(new BigNumber(params.amount).div(value))
 
     return {
@@ -299,6 +310,7 @@ const useSwapUtils = () => {
     queryKey: ["simulate.swap", params],
     queryFn: async () => {
       if (!validateParams(params)) throw new Error()
+
       const modes = getAvailableSwapModes(params)
       const functions = modes.map(getSimulateFunction)
       const queries = functions.map((fn) => fn(params))
@@ -313,7 +325,7 @@ const useSwapUtils = () => {
         profitable: findProfitable(results),
       }
     },
-    enabled: validateParams(params),
+    enabled: validateParams(params) && Boolean(lcd),
   })
 
   return {

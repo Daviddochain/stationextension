@@ -5,7 +5,6 @@ import {
   useInitialTokenBalance,
 } from "data/queries/bank"
 import { BankBalanceProvider } from "data/queries/bank"
-import { useNetworkName } from "data/wallet"
 import { combineState } from "data/query"
 import { WithFetching } from "components/feedback"
 import { useCustomTokensNative } from "data/settings/CustomTokens"
@@ -17,13 +16,13 @@ const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
   const native = useCustomTokensNative()
   const { whitelist } = useWhitelist()
 
-  const networkName = useNetworkName()
-
   const state = combineState(...balances, ...tokenBalancesQuery)
+
   const bankBalance = balances.reduce(
     (acc, { data }) => (data ? [...acc, ...data] : acc),
     [] as CoinBalance[]
   )
+
   const tokenBalance: CoinBalance[] = tokenBalancesQuery.reduce(
     (acc, { data }) => (data ? [...acc, data] : acc),
     [] as CoinBalance[]
@@ -32,12 +31,13 @@ const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
   native.list.forEach(({ id }) => {
     const [chain, ...denomData] = id.split(":")
     const denom = denomData.join(":")
+
     if (
       !bankBalance.find(
         (balance) => balance.denom === denom && balance.chain === chain
       )
     ) {
-      const token = whitelist[networkName][id]
+      const token = whitelist[id] // 🔥 FIXED (no networkName)
 
       if (!token || !token.chains || token.chains.length === 0) return
 

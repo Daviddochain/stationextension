@@ -33,12 +33,13 @@ const Asset = (props: Props) => {
   const { data: prices, ...pricesState } = useExchangeRates()
   const { route, setRoute } = useWalletRoute()
 
-  const coinPrice = (props.price || prices?.[token]?.price) ?? 0
-  const change = (props.change || prices?.[token]?.change) ?? 0
+  const coinPrice = props.price ?? prices?.[token]?.price ?? 0
+  const change = props.change ?? prices?.[token]?.change ?? 0
 
   const rawBalance = Number(balance ?? "0")
+  const safeDecimals = typeof decimals === "number" ? decimals : 6
   const humanBalance =
-    decimals && decimals > 0 ? rawBalance / Math.pow(10, decimals) : rawBalance
+    safeDecimals > 0 ? rawBalance / Math.pow(10, safeDecimals) : rawBalance
 
   const walletPrice = coinPrice * humanBalance
   const hasBalance = humanBalance > 0
@@ -93,7 +94,7 @@ const Asset = (props: Props) => {
 
             <h1 className={styles.price}>
               {currency.symbol}{" "}
-              {coinPrice && hasBalance ? (
+              {coinPrice > 0 && hasBalance ? (
                 <Read
                   {...props}
                   amount={walletPrice.toString()}
@@ -128,7 +129,7 @@ const Asset = (props: Props) => {
                         amount={balance}
                         token=""
                         fixed={amountFixed}
-                        decimals={decimals}
+                        decimals={safeDecimals}
                       />
                     )}
                   </>

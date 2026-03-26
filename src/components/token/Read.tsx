@@ -26,19 +26,24 @@ const Read = forwardRef(
   ) => {
     if (!(amount || Number.isFinite(amount))) return null
 
+    const numericAmount = Number(amount)
     const comma = !(typeof props.comma === "boolean" && props.comma === false)
 
     const fixed = !auto
       ? props.fixed
-      : Number(amount) >= Math.pow(10, (props.decimals ?? 6) + 3)
+      : numericAmount >= Math.pow(10, (props.decimals ?? 6) + 3)
       ? 0
-      : Number(amount) < Math.pow(10, props.decimals ?? 6)
+      : numericAmount < Math.pow(10, props.decimals ?? 6)
       ? props.decimals
       : 2
 
-    const lessThanFloor = fixed && Math.pow(10, -fixed)
-    const lessThanFixed =
-      amount && lessThanFloor && amount > 0 && amount < lessThanFloor
+    const lessThanFloor = fixed ? Math.pow(10, -fixed) : undefined
+    const lessThanFixed = Boolean(
+      amount &&
+        lessThanFloor &&
+        numericAmount > 0 &&
+        numericAmount < lessThanFloor
+    )
 
     const config = { ...props, comma, fixed }
     const [integer, decimal] = readAmount(amount, config).split(".")
@@ -46,7 +51,7 @@ const Read = forwardRef(
     const renderDecimal = () => {
       return (
         <span className={cx({ small: !props?.prefix })}>
-          {lessThanFixed
+          {lessThanFixed && lessThanFloor
             ? `.${lessThanFloor.toString().split(".")[1]}`
             : `.${decimal || (0).toFixed(fixed || 2).split(".")[1]}`}
         </span>
@@ -73,7 +78,7 @@ const Read = forwardRef(
     return (
       <span className={className} ref={ref}>
         {approx && "≈ "}
-        {!!lessThanFixed && "< "}
+        {lessThanFixed && "< "}
         {integer}
         {renderDecimal()}
         {renderSymbol()}

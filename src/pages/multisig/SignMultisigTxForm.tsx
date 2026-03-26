@@ -48,16 +48,22 @@ const SignMultisigTxForm = ({ defaultValues }: Props) => {
 
   const submit = async ({ address, tx }: TxValues) => {
     setSubmitting(true)
+    setError(undefined)
 
     try {
+      if (!lcd) throw new Error("LCD client is not available")
+      if (!chainID) throw new Error("Chain ID is not available")
+
       const decoded = lcd.tx.decode(tx.trim())
       if (!decoded) throw new Error("Invalid tx")
+
       const signature = await createSignature(
         decoded,
         chainID,
         address,
         password
       )
+
       setSignature(signature)
     } catch (error) {
       if (error instanceof PasswordError) setIncorrect(error.message)

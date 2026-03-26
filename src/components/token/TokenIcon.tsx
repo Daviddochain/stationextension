@@ -36,17 +36,18 @@ const normalizeAssetUrl = (url?: string) => {
   return url
 }
 
-const TokenIcon = ({ token, icon, size, ...rest }: Props) => {
+const TokenIcon = ({ token, icon, size, className, ...rest }: Props) => {
   const [isError, setIsError] = useState(false)
 
-  const defaultIcon = AccAddress.validate(token)
+  const safeToken = token ?? ""
+
+  const defaultIcon = AccAddress.validate(safeToken)
     ? getIcon("CW.svg")
-    : isDenomIBC(token)
+    : isDenomIBC(safeToken)
     ? getIcon("IBC.svg")
     : getIcon("Terra.svg")
 
   const normalizedIcon = normalizeAssetUrl(icon)
-
   const src = !normalizedIcon || isError ? defaultIcon : normalizedIcon
 
   const sizes =
@@ -57,8 +58,16 @@ const TokenIcon = ({ token, icon, size, ...rest }: Props) => {
           height: size ?? 24,
         }
 
-  const attrs = { ...rest, ...sizes, src, className: cx(styles.icon, size) }
-  return <img {...attrs} onError={() => setIsError(true)} alt="" />
+  return (
+    <img
+      {...rest}
+      {...sizes}
+      src={src}
+      className={cx(styles.icon, className)}
+      onError={() => setIsError(true)}
+      alt=""
+    />
+  )
 }
 
 export default TokenIcon

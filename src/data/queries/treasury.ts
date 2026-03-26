@@ -5,25 +5,30 @@ import { useLCDClient } from "./lcdClient"
 
 export const useTaxRate = (disabled = false) => {
   const lcd = useLCDClient()
+
   return useQuery(
     [queryKey.treasury.taxRate],
     async () => {
+      if (!lcd) return "0"
+
       const taxRate = await lcd.treasury.taxRate()
       return taxRate.toString() || "0"
     },
-    { ...RefetchOptions.INFINITY, enabled: !disabled }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(!disabled && lcd),
+    }
   )
 }
 
 const useGetQueryTaxCap = (disabled = false) => {
-  const lcd = useLCDClient(),
-    {
-      config: { isClassic },
-    } = useLCDClient()
+  const lcd = useLCDClient()
+  const isClassic = lcd?.config?.isClassic
+
   return (denom?: Denom) => ({
     queryKey: [queryKey.treasury.taxCap, denom],
     queryFn: async () => {
-      if (!denom || !isClassic || !isNativeToken(denom)) return "0"
+      if (!denom || !isClassic || !isNativeToken(denom) || !lcd) return "0"
 
       try {
         const taxCap = await lcd.treasury.taxCap(denom)
@@ -33,7 +38,7 @@ const useGetQueryTaxCap = (disabled = false) => {
       }
     },
     ...RefetchOptions.INFINITY,
-    enabled: isDenom(denom) && !disabled,
+    enabled: Boolean(isDenom(denom) && !disabled && lcd),
   })
 }
 
@@ -52,4 +57,4 @@ export const isNativeToken = (token?: Token) =>
 
 /* utils */
 export const getShouldTax = (token?: Token, isClassic?: boolean) =>
-  isClassic && isNativeToken(token)
+  Boolean(isClassic && isNativeToken(token))

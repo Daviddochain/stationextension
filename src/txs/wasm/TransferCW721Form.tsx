@@ -63,7 +63,6 @@ const TransferCW721Form = ({ contract, id }: Props) => {
     }
   }, [form, recipient, resolvedAddress, setValue])
 
-  // validate(tns): not found
   const invalid =
     recipient?.endsWith(".ust") && !tnsState.isLoading && !resolvedAddress
       ? t("Address not found")
@@ -94,7 +93,7 @@ const TransferCW721Form = ({ contract, id }: Props) => {
   )
 
   /* fee */
-  const estimationTxValues = useMemo(
+  const estimationTxValues = useMemo<TxValues>(
     () => ({ address: connectedAddress }),
     [connectedAddress]
   )
@@ -129,7 +128,7 @@ const TransferCW721Form = ({ contract, id }: Props) => {
         <Card isFetching={tnsState.isLoading}>
           <NFTAssetItem contract={contract} id={id} />
 
-          <Tx {...tx}>
+          <Tx<TxValues> {...tx}>
             {({ fee, submit }) => (
               <Form onSubmit={handleSubmit(submit.fn)}>
                 <FormItem

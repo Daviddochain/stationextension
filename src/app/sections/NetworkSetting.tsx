@@ -5,7 +5,7 @@ const NetworkSetting = () => {
   const [network, setNetwork] = useNetworkState()
   const networkOptions = useNetworkOptions()
 
-  if (!networkOptions) return null
+  if (!networkOptions?.length) return null
 
   return (
     <SettingsSelector

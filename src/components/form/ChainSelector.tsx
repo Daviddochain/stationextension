@@ -12,37 +12,28 @@ interface Props {
   noSearch?: boolean
 }
 
-const ChainSelector = ({
-  chainsList,
-  onChange,
-  value,
-  small,
-  noSearch,
-}: Props) => {
+const ChainSelector = ({ chainsList, onChange, value }: Props) => {
   const { networks } = useNetworks()
-  const allNetworks = useMemo(
-    () => ({
-      ...networks.localterra,
-      ...networks.classic,
-      ...networks.testnet,
-      ...networks.mainnet,
-    }),
-    [networks]
-  )
+
+  const allNetworks = useMemo(() => networks ?? {}, [networks])
 
   const list = useMemo(
-    () => chainsList.map((chainID) => allNetworks[chainID]),
+    () => chainsList.map((chainID) => allNetworks[chainID]).filter(Boolean),
     [allNetworks, chainsList]
   )
+
+  const selected = allNetworks[value]
+
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (ref.current && !ref.current.contains(event.target as Node)) {
-      setOpen(false)
-    }
-  }
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+
     document.addEventListener("mousedown", handleClickOutside)
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
@@ -59,17 +50,15 @@ const ChainSelector = ({
       <button
         type="button"
         className={styles.selector}
-        onClick={(e) => {
-          e.stopPropagation()
-          if (e.screenX && e.screenY) setOpen((o) => !o) // negate onClick triggered by enter key press
-        }}
+        onClick={() => setOpen((o) => !o)}
       >
         <span>
-          <img src={allNetworks[value]?.icon} alt={allNetworks[value]?.name} />{" "}
-          {allNetworks[value]?.name}
-        </span>{" "}
+          {selected?.icon && <img src={selected.icon} alt={selected.name} />}
+          {selected?.name ?? value}
+        </span>
         <ArrowDropDownIcon style={{ fontSize: 20 }} className={styles.caret} />
       </button>
+
       {open && (
         <ChainList list={list} onChange={handleSelection} value={value} />
       )}

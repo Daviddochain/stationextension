@@ -28,14 +28,12 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
   const { t } = useTranslation()
   const lcd = useInterchainLCDClient()
 
-  /* form */
   const defaultValues = {
     addresses: [{ value: "" }, { value: "" }, { value: "" }],
     threshold: 2,
   }
 
   const form = useForm<Values>({ mode: "onChange", defaultValues })
-
   const { register, control, handleSubmit, formState } = form
   const { errors, isValid } = formState
 
@@ -51,9 +49,12 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
     if (values.length) fieldArray.replace(values)
   }
 
-  /* query */
   const getPublicKey = async (address: AccAddress) => {
+    if (!lcd) throw new Error("LCD client is not defined")
+
     const accountInfo = await lcd.auth.accountInfo(address)
+    if (!accountInfo) throw new Error(`Account info not found: ${address}`)
+
     const publicKey = accountInfo.getPublicKey()
     if (!publicKey) throw new Error(`Public key is null: ${address}`)
     return publicKey
@@ -66,7 +67,9 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
       if (result.status === "rejected") {
         const message = axios.isAxiosError(result.reason)
           ? getErrorMessage(result.reason)
-          : result.reason
+          : result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason)
 
         throw new Error(message)
       }
@@ -75,11 +78,11 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
     })
   }
 
-  /* submit */
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async ({ addresses, threshold }: Values) => {
     setSubmitting(true)
+    setError(undefined)
 
     try {
       const values = addresses.map(({ value }) => value)
@@ -93,8 +96,8 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
     setSubmitting(false)
   }
 
-  /* render */
   const length = fields.length
+
   return (
     <Form onSubmit={handleSubmit(submit)}>
       <Grid gap={4}>
@@ -112,7 +115,7 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
             button={
               length - 1 === index
                 ? {
-                    onClick: () => append({ value: "" }),
+                    onClick: () => append({ value: "" as AccAddress }),
                     children: <AddIcon style={{ fontSize: 18 }} />,
                   }
                 : {
@@ -147,7 +150,7 @@ const CreateMultisigWalletForm = ({ onCreated }: Props) => {
 
       {error && <FormError>{error.message}</FormError>}
 
-      <Submit submitting={submitting} disabled={!isValid} />
+      <Submit submitting={submitting} disabled={!isValid || !lcd} />
     </Form>
   )
 }

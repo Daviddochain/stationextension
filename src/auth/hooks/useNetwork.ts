@@ -2,9 +2,8 @@ import { atom, useRecoilState, useRecoilValue } from "recoil"
 import { useNetworks } from "app/InitNetworks"
 import { getStoredNetwork, storeNetwork } from "../scripts/network"
 import { walletState } from "./useAuth"
-import is from "../scripts/is"
 import { useCustomLCDs } from "utils/localStorage"
-import { NetworkName, ChainID, InterchainNetwork } from "types/network"
+import { ChainID, InterchainNetwork } from "types/network"
 
 const networkState = atom({
   key: "network",
@@ -14,7 +13,7 @@ const networkState = atom({
 export const useNetworkState = () => {
   const [storedNetwork, setNetwork] = useRecoilState(networkState)
 
-  const changeNetwork = (network: NetworkName) => {
+  const changeNetwork = (network: string) => {
     if (network !== storedNetwork) {
       setNetwork(network)
       storeNetwork(network)
@@ -25,79 +24,39 @@ export const useNetworkState = () => {
 }
 
 export const useNetworkOptions = () => {
-  return [
-    { value: "mainnet", label: "Mainnets" },
-    { value: "classic", label: "Classic" },
-  ]
+  return [{ value: "all", label: "All Chains" }]
 }
 
 export const useNetwork = (): Record<ChainID, InterchainNetwork> => {
-  const { networks, filterEnabledNetworks } = useNetworks()
-  const [network] = useNetworkState()
-  const wallet = useRecoilValue(walletState)
+  const { networks } = useNetworks()
   const { customLCDs } = useCustomLCDs()
+  const wallet = useRecoilValue(walletState)
 
-  function withCustomLCDs(networks: Record<ChainID, InterchainNetwork>) {
-    return Object.fromEntries(
-      Object.entries(networks ?? {}).map(([key, val]) => [
-        key,
-        { ...val, lcd: customLCDs[val.chainID] || val.lcd },
-      ])
+  const allChains = Object.fromEntries(
+    Object.entries(networks ?? {}).map(([chainID, chain]) => [
+      chainID,
+      {
+        ...chain,
+        lcd: customLCDs[chainID] ?? chain.lcd,
+      },
+    ])
+  ) as Record<ChainID, InterchainNetwork>
+
+  if (!wallet) return allChains
+
+  const wordsMap = (wallet.words ?? {}) as Record<string, string | undefined>
+
+  return Object.fromEntries(
+    Object.entries(allChains).filter(
+      ([, chain]) => wordsMap[String(chain.coinType)]
     )
-  }
-
-  if (is.multisig(wallet)) {
-    const terra = Object.values(
-      withCustomLCDs(
-        networks[network as NetworkName] as Record<ChainID, InterchainNetwork>
-      ) ?? {}
-    ).find(({ prefix }) => prefix === "terra")
-
-    if (!terra) return {}
-
-    return filterEnabledNetworks({ [terra.chainID]: terra })
-  }
-
-  if (wallet) {
-    const enabledChains = Object.values(
-      withCustomLCDs(
-        networks[network as NetworkName] as Record<ChainID, InterchainNetwork>
-      ) ?? {}
-    ).filter(({ coinType }) => !!wallet?.words?.[coinType])
-
-    return filterEnabledNetworks(
-      enabledChains.reduce((acc, chain) => {
-        acc[chain.chainID] = chain
-        return acc
-      }, {} as Record<ChainID, InterchainNetwork>)
-    )
-  }
-
-  return filterEnabledNetworks(withCustomLCDs(networks[network as NetworkName]))
+  ) as Record<ChainID, InterchainNetwork>
 }
 
 export const useNetworkName = () => {
-  const network = useRecoilValue(networkState)
-  return network
+  return "all"
 }
 
 export const useChainID = () => {
-  const network = useRecoilValue(networkState)
-
-  switch (network) {
-    case "mainnet":
-      return "columbus-5"
-    case "mainnet_v2":
-      return "phoenix-1"
-    case "testnet":
-      return "rebel-2"
-    case "testnet_v2":
-      return "pisco-1"
-    case "classic":
-      return "columbus-5"
-    case "localterra":
-      return "localterra"
-  }
-
   return ""
 }

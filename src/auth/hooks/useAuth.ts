@@ -6,9 +6,11 @@ import {
   Tx,
   isTxError,
   SeedKey,
+  AccAddress,
+  SignDoc,
+  RawKey,
+  SignatureV2,
 } from "@terra-money/feather.js"
-import { AccAddress, SignDoc } from "@terra-money/feather.js"
-import { RawKey, SignatureV2 } from "@terra-money/feather.js"
 import { LedgerKey } from "@terra-money/ledger-station-js"
 import { useInterchainLCDClient } from "data/queries/lcdClient"
 import is from "../scripts/is"
@@ -49,7 +51,6 @@ const useAuth = () => {
     }
   }, [])
 
-  /* connect */
   const connect = useCallback(
     (name: string) => {
       const storedWallet = getStoredWallet(name)
@@ -62,19 +63,17 @@ const useAuth = () => {
 
         if (lock) throw new Error("Wallet is locked")
 
-        const wallet = is.multisig(storedWallet)
-          ? { name, words, multisig: true as true }
+        const nextWallet = is.multisig(storedWallet)
+          ? { name, words, multisig: true as const }
           : { name, words }
 
-        storeWallet(wallet)
-        setWallet(wallet as any)
+        storeWallet(nextWallet)
+        setWallet(nextWallet as any)
 
-        const walletForExtension = {
-          ...wallet,
+        void syncExtensionWallet({
+          ...nextWallet,
           address: addressFromWords(words["330"], "terra"),
-        }
-
-        void syncExtensionWallet(walletForExtension)
+        })
       } else {
         const { lock } = storedWallet
         if (lock) throw new Error("Wallet is locked")
@@ -82,15 +81,13 @@ const useAuth = () => {
         storeWallet(storedWallet)
         setWallet(storedWallet as any)
 
-        const walletForExtension = {
+        void syncExtensionWallet({
           ...storedWallet,
           address:
             "words" in storedWallet
               ? addressFromWords(storedWallet.words["330"], "terra")
               : (storedWallet as any).address,
-        }
-
-        void syncExtensionWallet(walletForExtension)
+        })
       }
     },
     [setWallet, syncExtensionWallet]
@@ -104,7 +101,7 @@ const useAuth = () => {
       bluetooth = false,
       name = "Ledger"
     ) => {
-      const wallet = {
+      const nextWallet = {
         words,
         pubkey,
         ledger: true as const,
@@ -114,21 +111,18 @@ const useAuth = () => {
         name,
       }
 
-      addWallet(wallet)
-      storeWallet(wallet)
-      setWallet(wallet as any)
+      addWallet(nextWallet)
+      storeWallet(nextWallet)
+      setWallet(nextWallet as any)
 
-      const walletForExtension = {
-        ...wallet,
+      void syncExtensionWallet({
+        ...nextWallet,
         address: addressFromWords(words["330"], "terra"),
-      }
-
-      void syncExtensionWallet(walletForExtension)
+      })
     },
     [setWallet, syncExtensionWallet]
   )
 
-  /* connected */
   const connectedWallet = useMemo(() => {
     if (!is.local(wallet)) return
     return wallet
@@ -139,7 +133,6 @@ const useAuth = () => {
     return connectedWallet
   }, [connectedWallet])
 
-  /* disconnected */
   const disconnect = useCallback(() => {
     clearWallet()
     setWallet(undefined)
@@ -152,7 +145,6 @@ const useAuth = () => {
     disconnect()
   }, [disconnect, getConnectedWallet])
 
-  /* helpers */
   const getKey = (password: string) => {
     const { name } = getConnectedWallet()
     return getDecryptedKey({ name, password })
@@ -166,12 +158,18 @@ const useAuth = () => {
     return LedgerKey.create({ transport, index, coinType: Number(coinType) })
   }
 
-  /* manage: export */
-  // TODO: export both 119 and 330 key
+  const getChain = (chainID?: string) => {
+    if (!chainID) throw new Error("Chain is not defined")
+    const chain = networks?.[chainID]
+    if (!chain) throw new Error(`Network not found for chainID: ${chainID}`)
+    return chain
+  }
+
   const encodeEncryptedWallet = (password: string) => {
     const { name, words } = getConnectedWallet()
     const key = getKey(password)
     if (!key) throw new PasswordError("Key do not exist")
+
     if ("seed" in key) {
       const seed = new SeedKey({
         seed: Buffer.from(key.seed, "hex"),
@@ -195,24 +193,25 @@ const useAuth = () => {
     return encode(JSON.stringify(data))
   }
 
-  /* form */
   const validatePassword = (password: string) => {
     try {
       const { name } = getConnectedWallet()
       return testPassword({ name, password })
-    } catch (error) {
+    } catch {
       return "Incorrect password"
     }
   }
 
-  /* tx */
   const create = async (txOptions: CreateTxOptions) => {
     if (!wallet) throw new Error("Wallet is not defined")
+    if (!lcd) throw new Error("LCD client is not defined")
+
     const { words } = wallet
-    const address = addressFromWords(
-      words[networks[txOptions?.chainID].coinType] ?? "",
-      networks[txOptions?.chainID]?.prefix
-    )
+    const wordsMap = words as Record<string, string | undefined>
+    const chain = getChain(txOptions?.chainID)
+    const coinType = String(chain.coinType)
+
+    const address = addressFromWords(wordsMap[coinType] ?? "", chain.prefix)
 
     return await lcd.tx.create([{ address }], txOptions)
   }
@@ -224,6 +223,10 @@ const useAuth = () => {
     password = ""
   ) => {
     if (!wallet) throw new Error("Wallet is not defined")
+    if (!lcd) throw new Error("LCD client is not defined")
+
+    const chain = getChain(chainID)
+    const coinType = String(chain.coinType)
 
     const accountInfo = await lcd.auth.accountInfo(address)
     if (!accountInfo) throw new Error("Couldn't retrieve account info")
@@ -237,31 +240,30 @@ const useAuth = () => {
     )
 
     if (is.ledger(wallet)) {
-      const key = await getLedgerKey(networks[chainID].coinType)
+      const key = await getLedgerKey(coinType)
       return await key.createSignatureAmino(doc)
-    } else {
-      const pk = getKey(password)
-      if (!pk) throw new PasswordError("Incorrect password")
-
-      if ("seed" in pk) {
-        const key = new SeedKey({
-          seed: Buffer.from(pk.seed, "hex"),
-          coinType:
-            pk.legacy && parseInt(networks[chainID].coinType) === 330
-              ? 118
-              : parseInt(networks[chainID].coinType),
-          index: pk.index || 0,
-        })
-        return await key.createSignatureAmino(doc)
-      } else {
-        if (!pk[networks[chainID].coinType])
-          throw new PasswordError("Incorrect password")
-        const key = new RawKey(
-          Buffer.from(pk[networks[chainID].coinType] ?? "", "hex")
-        )
-        return await key.createSignatureAmino(doc)
-      }
     }
+
+    const pk = getKey(password)
+    if (!pk) throw new PasswordError("Incorrect password")
+
+    if ("seed" in pk) {
+      const key = new SeedKey({
+        seed: Buffer.from(pk.seed, "hex"),
+        coinType:
+          pk.legacy && parseInt(coinType, 10) === 330
+            ? 118
+            : parseInt(coinType, 10),
+        index: pk.index || 0,
+      })
+      return await key.createSignatureAmino(doc)
+    }
+
+    const rawPk = pk as Record<string, string | undefined>
+    if (!rawPk[coinType]) throw new PasswordError("Incorrect password")
+
+    const key = new RawKey(Buffer.from(rawPk[coinType] ?? "", "hex"))
+    return await key.createSignatureAmino(doc)
   }
 
   const getPubkey = async (coinType: "330" | "118", password = "") => {
@@ -271,25 +273,26 @@ const useAuth = () => {
       const key = await getLedgerKey(coinType)
       // @ts-expect-error
       return key.publicKey.key
-    } else {
-      const pk = getKey(password)
-      if (!pk) throw new PasswordError("Incorrect password")
-
-      if ("seed" in pk) {
-        const key = new SeedKey({
-          seed: Buffer.from(pk.seed, "hex"),
-          coinType: pk.legacy ? 118 : parseInt(coinType),
-          index: pk.index || 0,
-        })
-        // @ts-expect-error
-        return key.publicKey.key
-      } else {
-        if (!pk[coinType]) throw new PasswordError("Incorrect password")
-        const key = new RawKey(Buffer.from(pk[coinType] ?? "", "hex"))
-        // @ts-expect-error
-        return key.publicKey.key
-      }
     }
+
+    const pk = getKey(password)
+    if (!pk) throw new PasswordError("Incorrect password")
+
+    if ("seed" in pk) {
+      const key = new SeedKey({
+        seed: Buffer.from(pk.seed, "hex"),
+        coinType: pk.legacy ? 118 : parseInt(coinType, 10),
+        index: pk.index || 0,
+      })
+      // @ts-expect-error
+      return key.publicKey.key
+    }
+
+    const rawPk = pk as Record<string, string | undefined>
+    if (!rawPk[coinType]) throw new PasswordError("Incorrect password")
+    const key = new RawKey(Buffer.from(rawPk[coinType] ?? "", "hex"))
+    // @ts-expect-error
+    return key.publicKey.key
   }
 
   const sign = async (
@@ -298,39 +301,42 @@ const useAuth = () => {
     signMode?: SignatureV2.SignMode
   ) => {
     if (!wallet) throw new Error("Wallet is not defined")
+    if (!lcd) throw new Error("LCD client is not defined")
+
+    const chain = getChain(txOptions?.chainID)
+    const coinType = String(chain.coinType)
 
     if (is.ledger(wallet)) {
-      const key = await getLedgerKey(networks[txOptions?.chainID].coinType)
-      const wallet = lcd.wallet(key)
-      return await wallet.createAndSignTx({
+      const key = await getLedgerKey(coinType)
+      const lcdWallet = lcd.wallet(key)
+      return await lcdWallet.createAndSignTx({
         ...txOptions,
         signMode: SignatureV2.SignMode.SIGN_MODE_LEGACY_AMINO_JSON,
       })
-    } else {
-      const pk = getKey(password)
-      if (!pk) throw new PasswordError("Incorrect password")
-
-      if ("seed" in pk) {
-        const key = new SeedKey({
-          seed: Buffer.from(pk.seed, "hex"),
-          coinType:
-            pk.legacy && parseInt(networks[txOptions?.chainID].coinType) === 330
-              ? 118
-              : parseInt(networks[txOptions?.chainID].coinType),
-          index: pk.index || 0,
-        })
-        const w = lcd.wallet(key)
-        return await w.createAndSignTx({ ...txOptions, signMode })
-      } else {
-        if (!pk[networks[txOptions?.chainID].coinType])
-          throw new PasswordError("Incorrect password")
-        const key = new RawKey(
-          Buffer.from(pk[networks[txOptions?.chainID].coinType] ?? "", "hex")
-        )
-        const w = lcd.wallet(key)
-        return await w.createAndSignTx(txOptions)
-      }
     }
+
+    const pk = getKey(password)
+    if (!pk) throw new PasswordError("Incorrect password")
+
+    if ("seed" in pk) {
+      const key = new SeedKey({
+        seed: Buffer.from(pk.seed, "hex"),
+        coinType:
+          pk.legacy && parseInt(coinType, 10) === 330
+            ? 118
+            : parseInt(coinType, 10),
+        index: pk.index || 0,
+      })
+      const lcdWallet = lcd.wallet(key)
+      return await lcdWallet.createAndSignTx({ ...txOptions, signMode })
+    }
+
+    const rawPk = pk as Record<string, string | undefined>
+    if (!rawPk[coinType]) throw new PasswordError("Incorrect password")
+
+    const key = new RawKey(Buffer.from(rawPk[coinType] ?? "", "hex"))
+    const lcdWallet = lcd.wallet(key)
+    return await lcdWallet.createAndSignTx(txOptions)
   }
 
   const signBytes = (bytes: Buffer, password = "") => {
@@ -338,33 +344,34 @@ const useAuth = () => {
 
     if (is.ledger(wallet)) {
       throw new Error("Ledger can not sign arbitrary data")
-    } else {
-      const pk = getKey(password)
-      if (!pk) throw new PasswordError("Incorrect password")
+    }
 
-      if ("seed" in pk) {
-        const key = new SeedKey({
-          seed: Buffer.from(pk.seed, "hex"),
-          coinType: pk.legacy ? 118 : 330,
-          index: pk.index || 0,
-        })
-        const { signature, recid } = key.ecdsaSign(bytes)
-        if (!signature) throw new Error("Signature is undefined")
-        return {
-          recid,
-          signature: Buffer.from(signature).toString("base64"),
-          public_key: key.publicKey?.toAmino().value as string,
-        }
-      } else {
-        const key = new RawKey(Buffer.from(pk["330"], "hex"))
-        const { signature, recid } = key.ecdsaSign(bytes)
-        if (!signature) throw new Error("Signature is undefined")
-        return {
-          recid,
-          signature: Buffer.from(signature).toString("base64"),
-          public_key: key.publicKey?.toAmino().value as string,
-        }
+    const pk = getKey(password)
+    if (!pk) throw new PasswordError("Incorrect password")
+
+    if ("seed" in pk) {
+      const key = new SeedKey({
+        seed: Buffer.from(pk.seed, "hex"),
+        coinType: pk.legacy ? 118 : 330,
+        index: pk.index || 0,
+      })
+      const { signature, recid } = key.ecdsaSign(bytes)
+      if (!signature) throw new Error("Signature is undefined")
+      return {
+        recid,
+        signature: Buffer.from(signature).toString("base64"),
+        public_key: key.publicKey?.toAmino().value as string,
       }
+    }
+
+    const rawPk = pk as Record<string, string | undefined>
+    const key = new RawKey(Buffer.from(rawPk["330"] ?? "", "hex"))
+    const { signature, recid } = key.ecdsaSign(bytes)
+    if (!signature) throw new Error("Signature is undefined")
+    return {
+      recid,
+      signature: Buffer.from(signature).toString("base64"),
+      public_key: key.publicKey?.toAmino().value as string,
     }
   }
 
@@ -374,6 +381,8 @@ const useAuth = () => {
     signMode?: SignatureV2.SignMode
   ) => {
     if (!wallet) throw new Error("Wallet is not defined")
+    if (!lcd) throw new Error("LCD client is not defined")
+
     const signedTx = await sign(txOptions, password, signMode)
     const result = await lcd.tx.broadcastSync(signedTx, txOptions?.chainID)
     if (isTxError(result)) throw new Error(result.raw_log)

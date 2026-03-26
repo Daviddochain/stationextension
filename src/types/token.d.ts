@@ -43,10 +43,10 @@ interface TokenItemWithBalance extends TokenItem {
   balance: string
 }
 
-/* native */
 interface CoinData {
   amount: Amount
   denom: Denom
+  chain?: string
 }
 
 /* ibc */

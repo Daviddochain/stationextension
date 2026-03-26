@@ -1,10 +1,9 @@
 import { useCallback } from "react"
 import { useQuery } from "react-query"
 import { queryKey, RefetchOptions } from "../query"
-import { CURRENCY_KEY, STATION_ASSETS, ASSETS } from "config/constants"
+import { STATION_ASSETS, ASSETS } from "config/constants"
 import axios from "axios"
 import { useCurrency } from "data/settings/Currency"
-import { useChainID } from "data/wallet"
 
 export const useActiveDenoms = () => {
   return useQuery(
@@ -73,7 +72,7 @@ const queryStationAliases = async () => {
 
     return data
   } catch (error) {
-    console.warn("Failed to load station aliases", error)
+    console.warn("Failed to load station aliases")
     return {}
   }
 }
@@ -116,7 +115,7 @@ const queryCMCPrices = async (): Promise<Record<string, ExternalPrice>> => {
     const data = response?.data
 
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-      console.warn("Invalid backend price response format", data)
+      console.warn("Invalid backend price response format")
       return {}
     }
 
@@ -226,7 +225,7 @@ const queryCMCPrices = async (): Promise<Record<string, ExternalPrice>> => {
 
     return mapped
   } catch (error) {
-    console.warn("Failed to load backend CoinMarketCap prices", error)
+    console.warn("Failed to load backend CoinMarketCap prices")
     return {}
   }
 }
@@ -246,32 +245,16 @@ const queryFiatPrice = async (currencyId: string) => {
 
     return data?.[currencyId]?.rate ?? 1
   } catch (error) {
-    console.warn(`Failed to load fiat conversion for ${currencyId}`, error)
+    console.warn(`Failed to load fiat conversion for ${currencyId}`)
     return 1
   }
 }
 
-const getUlunaPriceByChain = (
-  chainID: string | undefined,
-  prices: Record<string, ExternalPrice>
-) => {
-  if (chainID === "columbus-5") {
-    return prices["uluna:classic"] ?? prices.lunc ?? { usd: 0, change24h: 0 }
-  }
-
-  if (chainID === "phoenix-1") {
-    return prices["uluna:phoenix"] ?? prices.luna2 ?? { usd: 0, change24h: 0 }
-  }
-
-  return prices.uluna ?? prices.lunc ?? prices.luna2 ?? { usd: 0, change24h: 0 }
-}
-
 export const useExchangeRates = () => {
   const currency = useCurrency()
-  const chainID = useChainID()
 
   return useQuery(
-    [queryKey.coingecko.exchangeRates, currency, chainID],
+    [queryKey.coingecko.exchangeRates, currency],
     async () => {
       const [stationAliases, cmcPrices, fiatPrice] = await Promise.all([
         queryStationAliases(),
@@ -282,8 +265,6 @@ export const useExchangeRates = () => {
       const mergedPrices: Record<string, ExternalPrice> = {
         ...cmcPrices,
       }
-
-      const activeUluna = getUlunaPriceByChain(chainID, mergedPrices)
 
       const priceObject: PriceObject = {}
 
@@ -306,14 +287,6 @@ export const useExchangeRates = () => {
       const dgnUsd = mergedPrices.dgn?.usd ?? mergedPrices.udgn?.usd ?? 0
       const dgnChange =
         mergedPrices.dgn?.change24h ?? mergedPrices.udgn?.change24h ?? 0
-
-      const activeUlunaPrice = (activeUluna.usd ?? 0) * fiatPrice
-      const activeUlunaChange = activeUluna.change24h ?? 0
-
-      priceObject.uluna = {
-        price: activeUlunaPrice,
-        change: activeUlunaChange,
-      }
 
       priceObject["uluna:classic"] = {
         price: luncPrice,
@@ -414,16 +387,34 @@ export const useExchangeRates = () => {
   )
 }
 
-/* helpers */
 export type CalcValue = (params: CoinData) => number | undefined
 
 export const useMemoizedCalcValue = () => {
   const { data: memoizedPrices } = useExchangeRates()
 
   return useCallback<CalcValue>(
-    ({ amount, denom }) => {
+    ({ amount, denom, chain }) => {
       if (!memoizedPrices) return
-      return Number(amount) * Number(memoizedPrices[denom]?.price ?? 0)
+
+      const chainSpecificKey =
+        denom === "uluna" && chain
+          ? chain === "columbus-5"
+            ? "uluna:classic"
+            : chain === "phoenix-1" || chain === "pisco-1"
+            ? "uluna:phoenix"
+            : denom
+          : chain
+          ? `${chain}:${denom}`
+          : denom
+
+      return (
+        Number(amount) *
+        Number(
+          memoizedPrices[chainSpecificKey]?.price ??
+            memoizedPrices[denom]?.price ??
+            0
+        )
+      )
     },
     [memoizedPrices]
   )

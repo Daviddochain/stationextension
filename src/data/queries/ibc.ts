@@ -18,6 +18,8 @@ export const useIBCBaseDenom = (
   return useQuery(
     [queryKey.ibc.denomTrace, denom, chainID],
     async () => {
+      if (!lcd || !network?.[chainID]) return
+
       const { base_denom, path } = await lcd.ibcTransfer.denomTrace(
         denom.replace("ibc/", ""),
         chainID
@@ -25,7 +27,7 @@ export const useIBCBaseDenom = (
 
       const paths = path.split("/")
       const chains = [chainID]
-      const channels = []
+      const channels: { port: string; channel: string }[] = []
 
       for (let i = 0; i < paths.length; i += 2) {
         const chain = chains[0]
@@ -33,6 +35,8 @@ export const useIBCBaseDenom = (
         if (!network[chain]?.lcd) return
 
         const [port, channel] = [paths[i], paths[i + 1]]
+        if (!port || !channel) continue
+
         channels.unshift({ port, channel })
 
         const { data } = await axios.get(
@@ -47,6 +51,8 @@ export const useIBCBaseDenom = (
         ibcDenom: denom,
         baseDenom: base_denom.startsWith("cw20:")
           ? base_denom.replace("cw20:", "")
+          : base_denom.startsWith("factory:")
+          ? base_denom.replaceAll(":", "/")
           : base_denom,
         chainIDs: chains,
         channels,
@@ -54,7 +60,9 @@ export const useIBCBaseDenom = (
     },
     {
       ...RefetchOptions.INFINITY,
-      enabled: isDenomIBC(denom) && !!network[chainID] && enabled,
+      enabled: Boolean(
+        isDenomIBC(denom) && network?.[chainID] && lcd && enabled
+      ),
     }
   )
 }
@@ -66,8 +74,10 @@ export const useIBCBaseDenoms = (data: { denom: Denom; chainID: string }[]) => {
   return useQueries(
     data.map(({ denom, chainID }) => {
       return {
-        queryKey: [queryKey.ibc.denomTrace, denom, network],
+        queryKey: [queryKey.ibc.denomTrace, denom, chainID],
         queryFn: async () => {
+          if (!lcd || !network?.[chainID]) return
+
           const { base_denom, path } = await lcd.ibcTransfer.denomTrace(
             denom.replace("ibc/", ""),
             chainID
@@ -75,7 +85,7 @@ export const useIBCBaseDenoms = (data: { denom: Denom; chainID: string }[]) => {
 
           const paths = path.split("/")
           const chains = [chainID]
-          const channels = []
+          const channels: { port: string; channel: string }[] = []
 
           for (let i = 0; i < paths.length; i += 2) {
             const chain = chains[0]
@@ -83,6 +93,8 @@ export const useIBCBaseDenoms = (data: { denom: Denom; chainID: string }[]) => {
             if (!network[chain]?.lcd) return
 
             const [port, channel] = [paths[i], paths[i + 1]]
+            if (!port || !channel) continue
+
             channels.unshift({ port, channel })
 
             const { data } = await axios.get(
@@ -97,8 +109,7 @@ export const useIBCBaseDenoms = (data: { denom: Denom; chainID: string }[]) => {
             ibcDenom: denom,
             baseDenom: base_denom.startsWith("cw20:")
               ? base_denom.replace("cw20:", "")
-              : // fix for kujira factory tokens
-              base_denom.startsWith("factory:")
+              : base_denom.startsWith("factory:")
               ? base_denom.replaceAll(":", "/")
               : base_denom,
             chainIDs: chains,
@@ -106,7 +117,7 @@ export const useIBCBaseDenoms = (data: { denom: Denom; chainID: string }[]) => {
           }
         },
         ...RefetchOptions.INFINITY,
-        enabled: isDenomIBC(denom) && !!network[chainID],
+        enabled: Boolean(isDenomIBC(denom) && network?.[chainID] && lcd),
       }
     })
   )
@@ -122,7 +133,9 @@ export function calculateIBCDenom(baseDenom: string, path: string) {
     path,
     AccAddress.validate(baseDenom) ? `cw20:${baseDenom}` : baseDenom,
   ].join("/")
+
   const hash = crypto.createHash("sha256")
   hash.update(assetString)
+
   return `ibc/${hash.digest("hex").toUpperCase()}`
 }

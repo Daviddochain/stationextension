@@ -17,35 +17,44 @@ const ChainList = ({ list, onChange, value, small, noSearch }: Props) => {
   return (
     <div className={styles.options}>
       <WithSearchInput disabled={noSearch} inline gap={4}>
-        {(search) => (
-          <div
-            className={cx(
-              styles.options__container,
-              small && styles.options__container__small
-            )}
-          >
-            {list
-              .filter(
-                ({ chainID, name }) =>
-                  chainID.toLowerCase().includes(search.toLowerCase()) ||
-                  name.toLowerCase().includes(search.toLowerCase())
-              )
-              .map(({ chainID, name, icon }) => (
-                <button
-                  className={chainID === value ? styles.active : ""}
-                  key={chainID}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onChange(chainID)
-                  }}
-                >
-                  <img src={icon} alt={name} />
-                  {name}
-                </button>
-              ))}
-          </div>
-        )}
+        {(search) => {
+          const safeSearch = (search ?? "").toLowerCase()
+
+          return (
+            <div
+              className={cx(
+                styles.options__container,
+                small && styles.options__container__small
+              )}
+            >
+              {list
+                .filter(Boolean)
+                .filter(({ chainID, name }) => {
+                  const safeChainID = (chainID ?? "").toLowerCase()
+                  const safeName = (name ?? "").toLowerCase()
+
+                  return (
+                    safeChainID.includes(safeSearch) ||
+                    safeName.includes(safeSearch)
+                  )
+                })
+                .map(({ chainID, name, icon }) => (
+                  <button
+                    className={chainID === value ? styles.active : ""}
+                    key={chainID}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onChange(chainID)
+                    }}
+                  >
+                    {icon && <img src={icon} alt={name} />}
+                    {name ?? chainID}
+                  </button>
+                ))}
+            </div>
+          )
+        }}
       </WithSearchInput>
     </div>
   )

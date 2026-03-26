@@ -9,23 +9,21 @@ export enum SettingKey {
   Currency = "FiatCurrency",
   CustomNetworks = "CustomNetworks",
   CustomChains = "CustomChains",
-  GasAdjustment = "GasAdjust", // Tx
-  AddressBook = "AddressBook", // Send
+  GasAdjustment = "GasAdjust",
+  AddressBook = "AddressBook",
   HideNonWhitelistTokens = "HideNonWhiteListTokens",
   Network = "Network",
   CustomLCD = "CustomLCD",
   HideLowBalTokens = "HideLowBalTokens",
-  CustomTokens = "CustomTokensInterchain", // Wallet
-  MinimumValue = "MinimumValue", // Wallet (UST value to show on the list)
-  WithdrawAs = "WithdrawAs", // Rewards (Preferred denom to withdraw rewards)
+  CustomTokens = "CustomTokensInterchain",
+  MinimumValue = "MinimumValue",
+  WithdrawAs = "WithdrawAs",
   EnabledNetworks = "EnabledNetworks",
   NetworkCacheTime = "NetworkCacheTime",
   DevMode = "DevMode",
   ReplaceKeplr = "ReplaceKeplr",
+  SelectedDisplayChain = "SelectedDisplayChain", // ✅ ADDED
 }
-
-//const isSystemDarkMode =
-//  window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
 
 export const DefaultTheme = themes[1]
 
@@ -40,7 +38,10 @@ export const DefaultCustomTokensItem = (chainID: string) => ({
   ],
 })
 
-const DefaultCustomTokens = { mainnet: DefaultCustomTokensItem("phoenix-1") }
+// 🔥 FLATTENED (no more buckets)
+const DefaultCustomTokens = {
+  "phoenix-1": DefaultCustomTokensItem("phoenix-1"),
+}
 
 export const DefaultSettings = {
   [SettingKey.Theme]: DefaultTheme,
@@ -50,11 +51,7 @@ export const DefaultSettings = {
     symbol: "$",
   },
   [SettingKey.CustomNetworks]: [] as CustomNetwork[],
-  [SettingKey.CustomChains]: {
-    mainnet: {},
-    testnet: {},
-    classic: {},
-  } as Record<string, Record<string, InterchainNetwork>>,
+  [SettingKey.CustomChains]: {} as Record<string, InterchainNetwork>,
   [SettingKey.GasAdjustment]: DEFAULT_GAS_ADJUSTMENT,
   [SettingKey.AddressBook]: [] as AddressBook[],
   [SettingKey.CustomTokens]: DefaultCustomTokens as CustomTokens,
@@ -68,6 +65,7 @@ export const DefaultSettings = {
   [SettingKey.CustomLCD]: {},
   [SettingKey.DevMode]: false,
   [SettingKey.ReplaceKeplr]: false,
+  [SettingKey.SelectedDisplayChain]: "columbus-5", // ✅ ADDED
 }
 
 export const getLocalSetting = <T>(key: SettingKey): T => {
@@ -102,6 +100,11 @@ export const savedNetworkState = atom({
   default: getLocalSetting(SettingKey.Network) as string | undefined,
 })
 
+export const selectedDisplayChainState = atom({
+  key: "selectedDisplayChain",
+  default: getLocalSetting(SettingKey.SelectedDisplayChain) as string,
+})
+
 export const customLCDState = atom({
   key: "customLCD",
   default: getLocalSetting<Record<string, string | undefined>>(
@@ -111,7 +114,7 @@ export const customLCDState = atom({
 
 export const customChainsState = atom({
   key: "customChains",
-  default: getLocalSetting<Record<string, Record<string, InterchainNetwork>>>(
+  default: getLocalSetting<Record<string, InterchainNetwork>>(
     SettingKey.CustomChains
   ),
 })
@@ -142,6 +145,22 @@ export const useSavedNetwork = () => {
   return { savedNetwork, changeSavedNetwork }
 }
 
+export const useSelectedDisplayChain = () => {
+  const [selectedDisplayChain, setSelectedDisplayChain] = useRecoilState(
+    selectedDisplayChainState
+  )
+
+  const changeSelectedDisplayChain = useCallback(
+    (chainID: string) => {
+      setLocalSetting(SettingKey.SelectedDisplayChain, chainID)
+      setSelectedDisplayChain(chainID)
+    },
+    [setSelectedDisplayChain]
+  )
+
+  return { selectedDisplayChain, changeSelectedDisplayChain }
+}
+
 export const useCustomLCDs = () => {
   const [customLCDs, setCustomLCDs] = useRecoilState(customLCDState)
   function changeCustomLCDs(chainID: string, lcd: string | undefined) {
@@ -156,20 +175,13 @@ export const useCustomChains = () => {
   const [customChains, setCustomChains] = useRecoilState(customChainsState)
   return {
     customChains,
-    setCustomChains: (
-      chains: Record<string, Record<string, InterchainNetwork>>
-    ) => {
+    setCustomChains: (chains: Record<string, InterchainNetwork>) => {
       setLocalSetting(SettingKey.CustomChains, chains)
       setCustomChains(chains)
     },
     deleteCustomChain: (chainID: string) => {
       const newChains = Object.fromEntries(
-        Object.entries(customChains ?? {}).map(([key, value]) => [
-          key,
-          Object.fromEntries(
-            Object.entries(value ?? {}).filter(([key]) => key !== chainID) ?? {}
-          ),
-        ]) ?? {}
+        Object.entries(customChains ?? {}).filter(([key]) => key !== chainID)
       )
       setLocalSetting(SettingKey.CustomChains, newChains)
       setCustomChains(newChains)

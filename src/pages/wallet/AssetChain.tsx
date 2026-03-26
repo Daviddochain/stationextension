@@ -2,7 +2,7 @@ import { WithFetching } from "components/feedback"
 import { Read, TokenIcon } from "components/token"
 import { useExchangeRates } from "data/queries/coingecko"
 import { useCurrency } from "data/settings/Currency"
-import { useNetwork, useNetworkName } from "data/wallet"
+import { useNetwork } from "data/wallet"
 import { useTranslation } from "react-i18next"
 import styles from "./AssetChain.module.scss"
 import IbcSendBack from "./IbcSendBack"
@@ -26,36 +26,43 @@ export interface Props {
 const AssetChain = (props: Props) => {
   const { chain, symbol, balance, decimals, token, path, ibcDenom, denom } =
     props
+
   const currency = useCurrency()
   const { data: prices, ...pricesState } = useExchangeRates()
   const { t } = useTranslation()
-  const networkName = useNetworkName()
-  const allNetworks = useNetworks().networks[networkName]
-
+  const { networks: allNetworks = {} } = useNetworks()
   const networks = useNetwork()
-
-  const { icon, name } = allNetworks[chain] ?? { name: chain }
-
-  let price
-  if (symbol === "LUNC" && networkName !== "classic") {
-    price = prices?.["uluna:classic"]?.price ?? 0
-  } else {
-    price = prices?.[token]?.price ?? 0
-  }
-
   const { devMode } = useDevMode()
 
-  // send back is not available if one of the chains the asset went through is not supprted by Station
+  const chainInfo = allNetworks?.[chain]
+  const icon = chainInfo?.icon
+  const name = chainInfo?.name ?? chain
+
+  const priceKey =
+    token === "uluna"
+      ? chain === "columbus-5"
+        ? "uluna:classic"
+        : chain === "phoenix-1" || chain === "pisco-1"
+        ? "uluna:phoenix"
+        : token
+      : `${chain}:${token}`
+
+  const price = prices?.[priceKey]?.price ?? prices?.[token]?.price ?? 0
+
   const isSendBackDisabled =
-    !!path?.find((chain) => !networks[chain]) ||
-    (symbol === "LUNC" && networkName !== "classic")
+    !!path?.find((pathChain) => !networks?.[pathChain]) ||
+    (symbol === "LUNC" && chain === "columbus-5")
+
+  const sendBackTitle = `Send ${symbol} back to ${
+    allNetworks?.[path?.[0] ?? ""]?.name ?? path?.[0] ?? ""
+  }`
 
   return (
-    <article className={styles.chain} key={name}>
-      <TokenIcon token={name} icon={icon} size={28} />
+    <article className={styles.chain}>
+      <TokenIcon token={token} icon={icon} size={28} />
 
       <section className={styles.details}>
-        <h1 className={styles.name}>
+        <div className={styles.name}>
           <h4>
             {name}
             {ibcDenom &&
@@ -72,21 +79,21 @@ const AssetChain = (props: Props) => {
                     </article>
                   }
                 >
-                  <p className={styles.send__back__button__disabled}>
+                  <span className={styles.send__back__button__disabled}>
                     {t("Send back")}
-                  </p>
+                  </span>
                 </Tooltip>
               ) : (
                 <IbcSendBack
                   chainID={chain}
                   token={ibcDenom}
-                  title={`Send ${symbol} back to ${
-                    allNetworks[path[0]]?.name ?? path[0]
-                  }`}
+                  title={sendBackTitle}
                 >
                   {(open) => (
                     <InternalButton
-                      onClick={() => !isSendBackDisabled && open()}
+                      onClick={() => {
+                        if (!isSendBackDisabled) open()
+                      }}
                       className={styles.send__back__button}
                       disabled={isSendBackDisabled}
                     >
@@ -96,9 +103,11 @@ const AssetChain = (props: Props) => {
                 </IbcSendBack>
               ))}
           </h4>
+
           {path && (
-            <p>{path.map((c) => allNetworks[c]?.name ?? c).join(" → ")}</p>
+            <p>{path.map((c) => allNetworks?.[c]?.name ?? c).join(" → ")}</p>
           )}
+
           {devMode && (
             <p>
               <span className={styles.copy__denom}>
@@ -107,13 +116,14 @@ const AssetChain = (props: Props) => {
               </span>
             </p>
           )}
-        </h1>
+        </div>
+
         <h1 className={styles.price}>
           {currency.symbol}{" "}
           {price ? (
             <Read
               {...props}
-              amount={price * parseInt(balance)}
+              amount={price * Number(balance)}
               decimals={decimals}
               fixed={2}
               denom=""
@@ -123,6 +133,7 @@ const AssetChain = (props: Props) => {
             <span>—</span>
           )}
         </h1>
+
         <h2 className={styles.amount}>
           <WithFetching {...pricesState} height={1}>
             {(progress, wrong) => (

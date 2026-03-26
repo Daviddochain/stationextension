@@ -7,7 +7,6 @@ import { Fetching } from "components/feedback"
 import WithSearchInput from "./WithSearchInput"
 import TokenList from "./TokenList"
 import { useWhitelist } from "data/queries/chains"
-import { useNetworkName } from "data/wallet"
 
 interface Props {
   whitelist: { cw20: CW20Whitelist; native: NativeWhitelist }
@@ -47,15 +46,13 @@ const Component = ({ whitelist, keyword }: Props) => {
   }
 
   const listedItem = merged[keyword]
-  const shouldQueryCW20 = AccAddress.validate(keyword) && !listedItem
 
-  const {
-    data: tokenInfo,
-    isLoading: isTokenInfoLoading,
-    isError: isTokenInfoError,
-  } = useTokenInfoCW20(shouldQueryCW20 ? keyword : "")
+  const { data: tokenInfo, ...state } = useTokenInfoCW20(
+    !listedItem ? keyword : ""
+  )
 
   const responseItem = tokenInfo ? { token: keyword, ...tokenInfo } : undefined
+
   const result = listedItem ?? responseItem
 
   const results = AccAddress.validate(keyword)
@@ -70,6 +67,7 @@ const Component = ({ whitelist, keyword }: Props) => {
       })
 
   const manage = {
+    list: [...cw20.list, ...native.list],
     getIsAdded: (item: CustomTokenCW20 | NativeTokenItem) => {
       if (isCW20(item)) return cw20.getIsAdded(item)
       const nativeItem = item as NativeTokenItem
@@ -103,11 +101,8 @@ const Component = ({ whitelist, keyword }: Props) => {
 
   return (
     <TokenList
-      isLoading={isTokenInfoLoading}
-      error={isTokenInfoError}
-      getIsAdded={manage.getIsAdded}
-      add={manage.add}
-      remove={manage.remove}
+      {...state}
+      {...manage}
       results={results}
       renderTokenItem={renderTokenItem}
     />
@@ -115,21 +110,16 @@ const Component = ({ whitelist, keyword }: Props) => {
 }
 
 const ManageCustomTokens = () => {
-  const {
-    data: cw20,
-    isLoading: cw20IsLoading,
-    isError: cw20IsError,
-  } = useCW20Whitelist()
+  const { data: cw20, ...cw20WhitelistState } = useCW20Whitelist()
   const { whitelist } = useWhitelist()
-  const networkName = useNetworkName()
 
   const render = () => {
-    const cw20Data = cw20 ?? {}
+    if (!cw20) return null
 
     const cw20Whitelist: CW20Whitelist = {}
     const nativeWhitelist: NativeWhitelist = {}
 
-    Object.entries(whitelist[networkName] ?? {}).forEach(([id, asset]) => {
+    Object.entries(whitelist ?? {}).forEach(([id, asset]) => {
       if (AccAddress.validate(asset.token)) {
         cw20Whitelist[asset.token] = asset
       } else {
@@ -143,7 +133,7 @@ const ManageCustomTokens = () => {
           <Component
             whitelist={{
               cw20: {
-                ...cw20Data,
+                ...cw20,
                 ...cw20Whitelist,
               },
               native: nativeWhitelist,
@@ -156,7 +146,7 @@ const ManageCustomTokens = () => {
   }
 
   return (
-    <Fetching isLoading={cw20IsLoading} error={cw20IsError} height={2}>
+    <Fetching {...cw20WhitelistState} height={2}>
       {render()}
     </Fetching>
   )

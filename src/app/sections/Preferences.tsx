@@ -9,7 +9,6 @@ import LanguageSetting from "./LanguageSetting"
 import CurrencySetting from "./CurrencySetting"
 import { ModalButton } from "components/feedback"
 import SettingsButton from "components/layout/SettingsButton"
-import { useNetworkName } from "data/wallet"
 import { useCurrency } from "data/settings/Currency"
 import { Languages } from "config/lang"
 import { capitalize } from "@mui/material"
@@ -19,6 +18,8 @@ import SelectTheme from "./SelectTheme"
 import LCDSetting from "./LCDSetting"
 import { useTheme } from "data/settings/Theme"
 import AdvancedSettings from "./AdvancedSettings"
+import { useSelectedDisplayChain } from "utils/localStorage"
+import { useNetworks } from "app/InitNetworks"
 
 type Routes = "network" | "lang" | "currency" | "theme" | "lcd" | "advanced"
 
@@ -31,19 +32,23 @@ interface SettingsPage {
 }
 
 const Preferences = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [page, setPage] = useState<Routes | null>(null)
 
-  const { i18n } = useTranslation()
   const { id: currencyId } = useCurrency()
-  const networkName = useNetworkName()
   const { name } = useTheme()
+  const { selectedDisplayChain } = useSelectedDisplayChain()
+  const { networks } = useNetworks()
+
+  const selectedChainName =
+    (selectedDisplayChain && networks?.[selectedDisplayChain]?.name) ||
+    "All Chains"
 
   const routes: Record<Routes, SettingsPage> = {
     network: {
       key: "network",
       tab: t("Network"),
-      value: capitalize(networkName),
+      value: capitalize(selectedChainName),
       disabled: !sandbox,
     },
     lang: {
@@ -77,7 +82,6 @@ const Preferences = () => {
     lcd: {
       key: "lcd",
       tab: t("Custom LCD"),
-      // hide button on the main settings page
       disabled: true,
     },
   }

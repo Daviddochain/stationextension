@@ -10,29 +10,48 @@ import { useNetwork } from "data/wallet"
 
 export const useVotingParams = (chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.votingParams, chain],
-    () => lcd.gov.votingParameters(chain),
-    { ...RefetchOptions.INFINITY }
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.gov.votingParameters(chain)
+    },
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && chain),
+    }
   )
 }
 
 export const useDepositParams = (chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.depositParams, chain],
-    () => lcd.gov.depositParameters(chain),
-    { ...RefetchOptions.INFINITY }
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.gov.depositParameters(chain)
+    },
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && chain),
+    }
   )
 }
 
 export const useTallyParams = (chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.tallyParams, chain],
-    () => lcd.gov.tallyParameters(chain),
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.gov.tallyParameters(chain)
+    },
     {
       ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && chain),
     }
   )
 }
@@ -41,13 +60,18 @@ export const useTallyParams = (chain: string) => {
 export const useProposals = (status: Proposal.Status) => {
   const lcd = useInterchainLCDClient()
   const networks = useNetwork()
+
   return useQuery(
-    [queryKey.gov.proposals, status],
+    [queryKey.gov.proposals, status, networks],
     async () => {
-      const chainList = Object.keys(networks ?? {})
+      if (!lcd || !networks) return []
+
+      const chainList = Object.keys(networks)
+      if (!chainList.length) return []
+
       // TODO: Pagination
       // Required when the number of results exceed 100
-      // About 50 passed propsals from 2019 to 2021
+      // About 50 passed proposals from 2019 to 2021
       const proposals = await Promise.all(
         chainList.map((chainID) =>
           lcd.gov.proposals(chainID, {
@@ -57,18 +81,20 @@ export const useProposals = (status: Proposal.Status) => {
         )
       )
 
-      return proposals
-        .reduce(
-          (acc, cur, i) => {
+      return (
+        proposals
+          .reduce((acc, cur, i) => {
             cur[0].map((prop) => acc.push({ prop, chain: chainList[i] }))
             return acc
-          },
-          [] as { prop: Proposal; chain: string }[]
+          }, [] as { prop: Proposal; chain: string }[])
           // remove proposals with unsupported protobuf content
-        )
-        .filter(({ prop }) => prop.content)
+          .filter(({ prop }) => prop.content)
+      )
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(lcd && networks && Object.keys(networks).length),
+    }
   )
 }
 
@@ -116,11 +142,16 @@ export const useProposalStatusItem = (status: Proposal.Status) => {
 /* proposal */
 export const useProposal = (id: number, chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.proposal, id, chain],
-    () => lcd.gov.proposal(id, chain),
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.gov.proposal(id, chain)
+    },
     {
       ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && chain && id),
     }
   )
 }
@@ -128,25 +159,36 @@ export const useProposal = (id: number, chain: string) => {
 /* proposal: deposits */
 export const useDeposits = (id: number, chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.deposits, id, chain],
     async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+
       // TODO: Pagination
       // Required when the number of results exceed 100
       const [deposits] = await lcd.gov.deposits(id, chain)
       return deposits
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(lcd && chain && id),
+    }
   )
 }
 
 export const useTally = (id: number, chain: string) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.gov.tally, id, chain],
-    () => lcd.gov.tally(id, chain),
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.gov.tally(id, chain)
+    },
     {
       ...RefetchOptions.DEFAULT,
+      enabled: Boolean(lcd && chain && id),
     }
   )
 }
@@ -191,7 +233,8 @@ export const useGetVoteOptionItem = () => {
 
 /* helpers */
 export const useParseProposalType = (content?: Proposal.Content) => {
-  if (!content || !content.toData()) return "Unknowm proposal"
+  if (!content || !content.toData()) return "Unknown proposal"
+
   const { "@type": type } = content.toData()
   return sentenceCase(last(type.split(".")) ?? "")
 }

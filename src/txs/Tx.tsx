@@ -57,7 +57,6 @@ import { getAmount, sortByDenom } from "../utils/coin"
 const cx = classNames.bind(styles)
 
 interface Props<TxValues> {
-  /* Only when the token is paid out of the balance held */
   token?: Token
   baseDenom?: string
   decimals?: number
@@ -66,19 +65,16 @@ interface Props<TxValues> {
   balance?: Amount
   gasAdjustment?: number
 
-  /* tx simulation */
   estimationTxValues?: TxValues
   createTx: (values: TxValues) => CreateTxOptions | undefined
   taxRequired?: boolean
   excludeGasDenom?: (denom: string) => boolean
   chain: string
 
-  /* render */
   disabled?: string | false
   children: (props: RenderProps<TxValues>) => ReactNode
   onChangeMax?: (input: number) => void
 
-  /* on tx success */
   onPost?: () => void
   hideLoader?: boolean
   onSuccess?: () => void
@@ -100,12 +96,12 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const { children, onChangeMax } = props
   const { onPost, redirectAfterTx, queryKeys, onSuccess } = props
 
+  const bankBalance = useBankBalance()
   const [isMax, setIsMax] = useState(false)
   const [gasDenom, setGasDenom] = useState<string>(
-    getInitialGasDenom(useBankBalance())
+    getInitialGasDenom(bankBalance)
   )
 
-  /* context */
   const { t } = useTranslation()
   const lcd = useInterchainLCDClient()
   const networks = useNetwork()
@@ -117,9 +113,8 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const readNativeDenom = useNativeDenoms()
   const { data: carbonFees } = useCarbonFees()
 
-  /* taxes */
-  const isClassic = networks[chain]?.isClassic
-  const shouldTax = isClassic && getShouldTax(token, isClassic)
+  const isClassic = networks?.[chain]?.isClassic
+  const shouldTax = !!(isClassic && getShouldTax(token, isClassic))
   const { data: taxRate = "0", ...taxRateState } = useTaxRate(!shouldTax)
   const { data: taxCap = "0", ...taxCapState } = useTaxCap(token)
   const taxState = combineState(taxRateState, taxCapState)
@@ -131,19 +126,19 @@ function Tx<TxValues>(props: Props<TxValues>) {
       )
     : undefined
 
-  /* simulation: estimate gas */
-  const simulationTx = estimationTxValues && createTx(estimationTxValues)
+  const simulationTx = estimationTxValues
+    ? createTx(estimationTxValues)
+    : undefined
   const gasAdjustmentSetting = SettingKey.GasAdjustment
   const gasAdjustment =
-    networks[chain]?.gasAdjustment *
-    getLocalSetting<number>(gasAdjustmentSetting)
+    (networks?.[chain]?.gasAdjustment ?? 1) *
+    (getLocalSetting<number>(gasAdjustmentSetting) ?? 1)
 
   const key = {
     address: addresses?.[chain],
-    //network: networks,
     gasAdjustment: gasAdjustment * (txGasAdjustment ?? 1),
     estimationTxValues,
-    msgs: simulationTx?.msgs.map((msg) => msg.toData(isClassic)["@type"]),
+    msgs: simulationTx?.msgs.map((msg) => msg.toData(!!isClassic)["@type"]),
   }
 
   const { data: estimatedGas, ...estimatedGasState } = useQuery(
@@ -151,7 +146,9 @@ function Tx<TxValues>(props: Props<TxValues>) {
     async () => {
       if (!key.address || isWalletEmpty) return 0
       if (!wallet) return 0
+      if (!lcd) return 0
       if (!simulationTx || !simulationTx.msgs.length) return 0
+
       try {
         if (chain.startsWith("carbon-")) {
           return Number(
@@ -159,6 +156,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
               carbonFees?.costs["default_fee"]
           )
         }
+
         const unsignedTx = await lcd.tx.create([{ address: key.address }], {
           ...simulationTx,
           feeDenoms: [gasDenom],
@@ -172,10 +170,8 @@ function Tx<TxValues>(props: Props<TxValues>) {
     },
     {
       ...RefetchOptions.INFINITY,
-      // To handle sequence mismatch
       retry: 3,
       retryDelay: 1000,
-      // Because the focus occurs once when posting back from the extension
       refetchOnWindowFocus: false,
       enabled: !isBroadcasting,
     }
@@ -185,7 +181,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
     (denom: CoinDenom) => {
       const gasPrice = chain?.startsWith("carbon-")
         ? carbonFees?.prices[denom]
-        : networks[chain]?.gasPrices[denom]
+        : networks?.[chain]?.gasPrices?.[denom]
       if (isNil(estimatedGas) || !gasPrice) return "0"
       return new BigNumber(estimatedGas)
         .times(gasPrice)
@@ -198,7 +194,6 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const gasAmount = getGasAmount(gasDenom)
   const gasFee = { amount: gasAmount, denom: gasDenom }
 
-  /* max */
   const getNativeMax = () => {
     if (!balance) return
     return gasFee.denom === token
@@ -212,31 +207,29 @@ function Tx<TxValues>(props: Props<TxValues>) {
     ? getNativeMax()
     : balance
 
-  /* (effect): Call the onChangeMax function whenever the max changes */
   useEffect(() => {
     if (max && isMax && onChangeMax) onChangeMax(toInput(max, decimals))
   }, [decimals, isMax, max, onChangeMax])
 
-  /* tax */
   const taxAmount =
     token && amount && shouldTax
       ? calcMinimumTaxAmount(amount, { rate: taxRate, cap: taxCap })
       : undefined
 
-  /* (effect): Log error on console */
   const failed = getErrorMessage(taxState.error ?? estimatedGasState.error)
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && failed) {
       console.groupCollapsed("Fee estimation failed")
       console.info(
-        simulationTx?.msgs.map((msg) => msg.toData(networks[chain].isClassic))
+        simulationTx?.msgs.map((msg) =>
+          msg.toData(!!networks?.[chain]?.isClassic)
+        )
       )
       console.info(failed)
       console.groupEnd()
     }
   }, [failed, simulationTx, networks, chain])
 
-  /* submit */
   const passwordRequired = isWallet.single(wallet)
   const [password, setPassword] = useState("")
   const [incorrect, setIncorrect] = useState<string>()
@@ -258,6 +251,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
 
   const navigate = useNavigate()
   const toPostMultisigTx = useToPostMultisigTx()
+
   const submit = async (values: TxValues) => {
     setSubmitting(true)
 
@@ -265,28 +259,29 @@ function Tx<TxValues>(props: Props<TxValues>) {
       if (disabled) throw new Error(disabled)
       if (
         !estimatedGas ||
-        (!has(gasAmount) && networks[chain]?.gasPrices[gasDenom])
-      )
+        (!has(gasAmount) && networks?.[chain]?.gasPrices?.[gasDenom])
+      ) {
         throw new Error("Fee is not estimated")
+      }
 
       const tx = createTx(values)
-
       if (!tx) throw new Error("Tx is not defined")
 
       const gasCoins = new Coins([Coin.fromData(gasFee)])
       const taxCoin =
-        token && taxAmount && has(taxAmount) && new Coin(token, taxAmount)
+        token && taxAmount && has(taxAmount)
+          ? new Coin(token, taxAmount)
+          : undefined
       const taxCoins = sanitizeTaxes(taxes) ?? taxCoin
       const feeCoins = taxCoins ? gasCoins.add(taxCoins) : gasCoins
       const fee = new Fee(estimatedGas, feeCoins)
 
       if (isWallet.multisig(wallet)) {
-        // TODO: broadcast only to terra if wallet is multisig
         const unsignedTx = await auth.create({ ...tx, fee })
         navigate(toPostMultisigTx(unsignedTx))
       } else if (wallet) {
         const result = await auth.post({ ...tx, fee }, password)
-        !hideLoader &&
+        if (!hideLoader) {
           setLatestTx({
             txhash: result.txhash,
             queryKeys,
@@ -294,6 +289,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
             redirectAfterTx,
             chainID: chain,
           })
+        }
       }
 
       onPost?.()
@@ -307,7 +303,6 @@ function Tx<TxValues>(props: Props<TxValues>) {
 
   const submittingLabel = isWallet.ledger(wallet) ? t("Confirm in ledger") : ""
 
-  /* render */
   const balanceAfterTx =
     balance &&
     amount &&
@@ -322,15 +317,9 @@ function Tx<TxValues>(props: Props<TxValues>) {
     : false
 
   const availableGasDenoms = useMemo(() => {
-    return Object.keys(networks[chain]?.gasPrices ?? {})
+    return Object.keys(networks?.[chain]?.gasPrices ?? {})
   }, [chain, networks])
 
-  // useEffect(() => {
-  //   if (availableGasDenoms.includes(gasDenom)) return
-  //   setGasDenom(availableGasDenoms[0])
-  // }, [availableGasDenoms, gasDenom])
-
-  /* element */
   const resetMax = () => setIsMax(false)
   const renderMax: RenderMax = (onClick) => {
     if (!(max && has(max))) return null
@@ -519,7 +508,7 @@ export const getInitialGasDenom = (bankBalance: CoinBalance[]) => {
   const uusd = getAmount(bankBalance, "uusd")
   return has(uusd) ? "uusd" : denom
 }
-/* utils */
+
 export const calcMinimumTaxAmount = (
   amount: BigNumber.Value,
   { rate, cap }: { rate: BigNumber.Value; cap: BigNumber.Value }
@@ -535,7 +524,6 @@ const sanitizeTaxes = (taxes?: Coins) => {
     : undefined
 }
 
-/* hooks */
 export const useTxKey = () => {
   const { txhash } = useRecoilValue(latestTxState)
   const [key, setKey] = useState(txhash)

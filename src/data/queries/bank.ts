@@ -16,15 +16,16 @@ export const useInitialTokenBalance = () => {
   return useQueries(
     cw20.map(({ token }) => {
       const chainID = getChainIDFromAddress(token, networks)
-      const address = chainID && addresses?.[chainID]
+      const address = chainID ? addresses?.[chainID] : undefined
+
       return {
         queryKey: [queryKey.bank.balances, token, chainID, address],
         queryFn: async () => {
-          if (!address)
+          if (!address || !chainID || !lcd)
             return {
               amount: "0",
               denom: token,
-              chain: chainID,
+              chain: chainID ?? "",
             } as CoinBalance
 
           try {
@@ -39,8 +40,7 @@ export const useInitialTokenBalance = () => {
             } as CoinBalance
           } catch (error) {
             console.warn(
-              `useInitialTokenBalance: failed for token ${token} on chain ${chainID}`,
-              error
+              `useInitialTokenBalance: failed for token ${token} on chain ${chainID}`
             )
 
             return {
@@ -51,13 +51,13 @@ export const useInitialTokenBalance = () => {
             } as CoinBalance
           }
         },
+        enabled: Boolean(chainID && address && lcd),
         ...RefetchOptions.DEFAULT,
       }
     })
   )
 }
 
-// As a wallet app, native token balance is always required from the beginning.
 export const [useBankBalance, BankBalanceProvider] =
   createContext<CoinBalance[]>("useBankBalance")
 
@@ -70,7 +70,7 @@ export const useInitialBankBalance = () => {
       return {
         queryKey: [queryKey.bank.balances, address, chainID],
         queryFn: async () => {
-          if (!address) return [] as CoinBalance[]
+          if (!address || !lcd) return [] as CoinBalance[]
 
           try {
             const bal = ["phoenix-1", "pisco-1"].includes(chainID)
@@ -83,14 +83,11 @@ export const useInitialBankBalance = () => {
               chain: chainID,
             })) as CoinBalance[]
           } catch (error) {
-            console.warn(
-              `useInitialBankBalance: failed for chain ${chainID}`,
-              error
-            )
+            console.warn(`useInitialBankBalance: failed for chain ${chainID}`)
             return [] as CoinBalance[]
           }
         },
-        disabled: !address,
+        enabled: Boolean(address && lcd),
         ...RefetchOptions.DEFAULT,
       }
     })
@@ -111,23 +108,28 @@ export const useBalances = () => {
   return useQuery(
     [queryKey.bank.balances, addresses],
     async () => {
-      if (!addresses) return [] as CoinBalance[]
-      const chains = Object.keys(addresses ?? {})
+      if (!addresses || !lcd) return [] as CoinBalance[]
 
-      // TODO: Pagination
-      // Required when the number of results exceed 100
+      const chains = Object.keys(addresses)
+
       const balances = await Promise.all(
         chains.map(async (chain) => {
+          const address = addresses[chain]
+          if (!address) return null
+
           try {
-            return await lcd.bank.balance(addresses[chain])
-          } catch (error) {
-            console.warn(`useBalances: failed for chain ${chain}`, error)
+            return ["phoenix-1", "pisco-1"].includes(chain)
+              ? await lcd.bank.spendableBalances(address)
+              : await lcd.bank.balance(address)
+          } catch {
+            console.warn(`useBalances: failed for chain ${chain}`)
             return null
           }
         })
       )
 
-      const result = [] as CoinBalance[]
+      const result: CoinBalance[] = []
+
       chains.forEach((chain, i) => {
         const balanceResult = balances[i]
         if (!balanceResult) return
@@ -140,13 +142,17 @@ export const useBalances = () => {
           })
         )
       })
+
       return result
     },
-    { ...RefetchOptions.DEFAULT }
+    {
+      ...RefetchOptions.DEFAULT,
+      enabled: Boolean(addresses && Object.keys(addresses).length && lcd),
+    }
   )
 }
 
 export const useIsWalletEmpty = () => {
   const bankBalance = useBankBalance()
-  return !bankBalance.length
+  return !bankBalance?.length
 }

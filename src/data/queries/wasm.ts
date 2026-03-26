@@ -10,22 +10,35 @@ import { getChainIDFromAddress } from "utils/bech32"
 /* contract info */
 export const useContractInfo = (address: TerraAddress) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery(
     [queryKey.wasm.contractInfo, address],
-    () => lcd.wasm.contractInfo(address),
-    { ...RefetchOptions.INFINITY, enabled: AccAddress.validate(address) }
+    async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+      return await lcd.wasm.contractInfo(address)
+    },
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && AccAddress.validate(address)),
+    }
   )
 }
 
 export const useInitMsg = <T>(address: TerraAddress) => {
   const lcd = useInterchainLCDClient()
+
   return useQuery<T>(
     [queryKey.wasm.contractInfo, "initMsg", address],
     async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+
       const d = await lcd.wasm.contractInfo(address)
       return d.init_msg
     },
-    { ...RefetchOptions.INFINITY, enabled: AccAddress.validate(address) }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && AccAddress.validate(address)),
+    }
   )
 }
 
@@ -36,10 +49,10 @@ export const useGetContractQuery = () => {
   return <T>(contract?: AccAddress, query?: object) => ({
     queryKey: [queryKey.wasm.contractQuery, contract, query],
     queryFn: async () => {
-      if (!(contract && query)) return
+      if (!(contract && query) || !lcd) return
       return await lcd.wasm.contractQuery<T>(contract, query)
     },
-    enabled: !!contract && AccAddress.validate(contract),
+    enabled: Boolean(lcd && contract && AccAddress.validate(contract)),
   })
 }
 
@@ -51,10 +64,11 @@ export const useContractQuery = <T>(contract?: AccAddress, query?: object) => {
 /* token info */
 export const useTokenInfoCW20 = (token: TerraAddress, enabled = true) => {
   const getQuery = useGetContractQuery()
+
   return useQuery({
     ...getQuery<CW20TokenInfoResponse>(token, { token_info: {} }),
     ...RefetchOptions.INFINITY,
-    enabled: AccAddress.validate(token) && enabled,
+    enabled: Boolean(AccAddress.validate(token) && enabled),
   })
 }
 
@@ -64,6 +78,8 @@ export const useTokenInfoCW721 = (contract: AccAddress, token_id: string) => {
   return useQuery(
     [queryKey.wasm.contractQuery, contract, token_id],
     async () => {
+      if (!lcd) throw new Error("LCD client is not available")
+
       const data = await lcd.wasm.contractQuery<NFTTokenItem>(contract, {
         nft_info: { token_id },
       })
@@ -79,7 +95,10 @@ export const useTokenInfoCW721 = (contract: AccAddress, token_id: string) => {
         return data
       }
     },
-    { ...RefetchOptions.INFINITY }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(lcd && contract && token_id),
+    }
   )
 }
 
@@ -92,18 +111,22 @@ const useGetTokenBalanceQuery = () => {
   return (token: AccAddress) => ({
     queryKey: [queryKey.wasm.contractQuery, token, { balance: addresses }],
     queryFn: async () => {
+      if (!lcd || !addresses) return "0"
+
       const chainID = getChainIDFromAddress(token, network)
-      if (!addresses || !addresses[chainID ?? ""]) return "0"
+      const address = chainID ? addresses[chainID] : undefined
+      if (!address) return "0"
+
       const { balance } = await lcd.wasm.contractQuery<{ balance: Amount }>(
         token,
-        { balance: { address: addresses[chainID ?? ""] } }
+        { balance: { address } }
       )
 
       return balance
     },
     ...RefetchOptions.DEFAULT,
-    retry: false, // Tokens that are not implemented fail to get the balance.
-    enabled: AccAddress.validate(token),
+    retry: false,
+    enabled: Boolean(lcd && AccAddress.validate(token)),
   })
 }
 
@@ -120,7 +143,8 @@ export const useTokenBalances = (tokens: AccAddress[]) => {
 export const useCW721Tokens = (contract: AccAddress) => {
   const addresses = useInterchainAddresses()
   const getQuery = useGetContractQuery()
-  const chainID = getChainIDFromAddress(contract, useNetwork())
+  const network = useNetwork()
+  const chainID = getChainIDFromAddress(contract, network)
 
   return useQuery(
     getQuery<{ tokens: string[] }>(contract, {

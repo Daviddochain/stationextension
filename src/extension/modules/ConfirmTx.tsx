@@ -43,7 +43,6 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
   const chainID =
     "tx" in props ? props.tx?.chainID ?? terraChainID : terraChainID
 
-  /* form */
   const form = useForm<Values>({
     defaultValues: { password: "" },
   })
@@ -51,7 +50,6 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
   const { register, setValue, watch, handleSubmit } = form
   const { password } = watch()
 
-  /* store password */
   const [storePassword, setStorePassword] = useState(false)
   const nextPassword = storePassword ? password : ""
 
@@ -62,7 +60,6 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
     })
   }, [setValue])
 
-  /* submit */
   const [incorrect, setIncorrect] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
 
@@ -70,24 +67,31 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
     [
       queryKey.tx.create,
       "tx" in props &&
-        props.tx.msgs.map((m) => m.toData(network[chainID]?.isClassic)),
+        props.tx.msgs.map((m) => m.toData(network?.[chainID]?.isClassic)),
       addresses?.[chainID],
-      network[chainID],
+      network?.[chainID],
     ],
     async () => {
       if (!("tx" in props)) return 0
+      if (!lcd) return 0
+
       const { tx } = props
 
       try {
-        if (!addresses || !addresses[tx?.chainID] || !network[tx?.chainID])
+        if (!addresses || !addresses[tx?.chainID] || !network?.[tx?.chainID]) {
           return 0
-        const { baseAsset, gasPrices } = network[tx?.chainID]
+        }
 
+        const { baseAsset, gasPrices } = network[tx.chainID]
         const feeDenom =
-          baseAsset in gasPrices ? baseAsset : Object.keys(gasPrices ?? {})[0]
+          baseAsset && gasPrices?.[baseAsset] !== undefined
+            ? baseAsset
+            : Object.keys(gasPrices ?? {})[0]
+
+        if (!feeDenom) return 0
 
         const unsignedTx = await lcd.tx.create(
-          [{ address: addresses[tx?.chainID] }],
+          [{ address: addresses[tx.chainID] }],
           {
             ...tx,
             feeDenoms: [feeDenom],
@@ -102,9 +106,6 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
     },
     {
       ...RefetchOptions.INFINITY,
-      // To handle sequence mismatch
-      //retry: 3,
-      //retryDelay: 1000,
       refetchOnWindowFocus: false,
       enabled:
         "tx" in props && !props.tx.fee?.gas_limit && !!addresses?.[chainID],
@@ -113,17 +114,23 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
 
   let fee: Fee | undefined
 
-  if ("tx" in props && network[props.tx?.chainID]) {
+  if ("tx" in props && network?.[props.tx?.chainID]) {
     const { tx } = props
     fee = tx.fee
+
     if (!tx.fee?.gas_limit) {
-      const { baseAsset, gasPrices, gasAdjustment } = network[tx?.chainID]
+      const { baseAsset, gasPrices, gasAdjustment } = network[tx.chainID]
       const gas = Math.ceil((estimatedGas ?? 0) * gasAdjustment)
 
       const feeDenom =
-        baseAsset in gasPrices ? baseAsset : Object.keys(gasPrices ?? {})[0]
+        baseAsset && gasPrices?.[baseAsset] !== undefined
+          ? baseAsset
+          : Object.keys(gasPrices ?? {})[0]
 
-      fee = new Fee(gas, { [feeDenom]: Math.ceil(gasPrices[feeDenom] * gas) })
+      if (feeDenom) {
+        const gasPrice = Number(gasPrices?.[feeDenom] ?? 0)
+        fee = new Fee(gas, { [feeDenom]: Math.ceil(gasPrice * gas) })
+      }
     }
   }
 
@@ -136,6 +143,7 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
 
   const navigate = useNavigate()
   const toPostMultisigTx = useToPostMultisigTx()
+
   const submit = async ({ password }: Values) => {
     setSubmitting(true)
 
@@ -151,6 +159,7 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
           const { pathname, search } = toPostMultisigTx(unsignedTx)
           const openURL = getOpenURL([pathname, search].join("?"))
           actions.multisigTx(props)
+
           if (openURL) openURL()
           else navigate({ pathname, search })
         } else {
@@ -168,7 +177,6 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
         }
       }
     } else {
-      // arbitrary data
       const { requestType, bytes } = props
 
       try {

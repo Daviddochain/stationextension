@@ -24,7 +24,7 @@ export const useTerraAssets = <T>(path: string, callback?: (data: T) => T) => {
         const { data } = await axios.get<T>(path, config)
         return callback?.(data) ?? data
       } catch (error) {
-        console.warn(`useTerraAssets: failed to fetch ${path}`, error)
+        console.warn(`useTerraAssets: failed to fetch ${path}`)
         return getEmptyValue(path) as T
       }
     },
@@ -43,16 +43,18 @@ export const useTerraAssetsByNetwork = <T>(
     [queryKey.TerraAssets, path, networkName],
     async () => {
       try {
-        const { data } = await axios.get<Record<NetworkName, T>>(path, config)
-        const networkData = data?.[networkName]
+        const { data } = await axios.get<Record<string, T>>(path, config)
+
+        // 🔥 FIX: fallback to "all" or return full dataset
+        const networkData =
+          data?.[networkName] ?? data?.["all"] ?? (data as unknown as T)
 
         if (!networkData) return getEmptyValue(path) as T
 
         return callback?.(networkData) ?? networkData
       } catch (error) {
         console.warn(
-          `useTerraAssetsByNetwork: failed to fetch ${path} for ${networkName}`,
-          error
+          `useTerraAssetsByNetwork: failed to fetch ${path} for ${networkName}`
         )
         return getEmptyValue(path) as T
       }
@@ -62,23 +64,21 @@ export const useTerraAssetsByNetwork = <T>(
 }
 
 export const useIBCWhitelist = () => {
-  return useTerraAssetsByNetwork<IBCWhitelist>("ibc/tokens.json")
+  return useTerraAssets<IBCWhitelist>("ibc/tokens.json")
 }
 
 export const useCW20Contracts = () => {
-  return useTerraAssetsByNetwork<CW20Contracts>("cw20/contracts.json")
+  return useTerraAssets<CW20Contracts>("cw20/contracts.json")
 }
 
 export const useCW20Whitelist = (disabled = false) => {
-  return useTerraAssetsByNetwork<CW20Whitelist>(
-    "cw20/tokens.json",
-    disabled,
-    (data) => sortWhitelistCW20(shuffleByProtocol(data))
+  return useTerraAssets<CW20Whitelist>("cw20/tokens.json", (data) =>
+    sortWhitelistCW20(shuffleByProtocol(data))
   )
 }
 
 export const useCW20Pairs = () => {
-  return useTerraAssetsByNetwork<CW20Pairs>("cw20/pairs.dex.json")
+  return useTerraAssets<CW20Pairs>("cw20/pairs.dex.json")
 }
 
 export type ContractNames =
@@ -89,13 +89,12 @@ export type ContractNames =
 
 export type TerraContracts = Record<ContractNames, AccAddress>
 export const useTerraContracts = () => {
-  return useTerraAssetsByNetwork<TerraContracts>("contracts.json")
+  return useTerraAssets<TerraContracts>("contracts.json")
 }
 
 export const useCW721Whitelist = () => {
-  return useTerraAssetsByNetwork<CW721Whitelist>(
+  return useTerraAssets<CW721Whitelist>(
     "cw721/contracts.json",
-    undefined,
     shuffleByProtocol
   )
 }

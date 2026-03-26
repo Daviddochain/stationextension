@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import styles from "./ChainSelector.module.scss"
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown"
 import AssetList from "./AssetList"
+
 interface AssetType {
   denom: string
   balance: string
@@ -27,12 +28,13 @@ const AssetSelector = ({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (ref.current && !ref.current.contains(event.target as Node)) {
-      setOpen(false)
-    }
-  }
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+
     document.addEventListener("mousedown", handleClickOutside)
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
@@ -44,28 +46,25 @@ const AssetSelector = ({
     setOpen(false)
   }
 
+  const selected = assetsByDenom[value]
+
   return (
     <div className={styles.container} ref={ref}>
       <button
         type="button"
         className={styles.selector}
-        onClick={(e) => {
-          e.stopPropagation()
-          if (e.screenX && e.screenY) setOpen((o) => !o) // negate onClick triggered by enter key press
-        }}
+        onClick={() => setOpen((o) => !o)}
       >
         <span>
-          <img
-            src={assetsByDenom[value]?.icon}
-            alt={assetsByDenom[value]?.denom}
-          />{" "}
-          {assetsByDenom[value]?.symbol}
-        </span>{" "}
+          {selected?.icon && <img src={selected.icon} alt={selected.denom} />}
+          {selected?.symbol ?? value}
+        </span>
         <ArrowDropDownIcon style={{ fontSize: 20 }} className={styles.caret} />
       </button>
+
       {open && (
         <AssetList
-          list={assetList.filter(({ balance }) => !!Number(balance))}
+          list={assetList.filter(({ balance }) => Number(balance) > 0)}
           onChange={handleSelection}
           value={value}
         />

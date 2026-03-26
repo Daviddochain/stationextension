@@ -15,13 +15,13 @@ interface AssetType {
 
 interface Props {
   list: AssetType[]
-  onChange: (symbol: string, index: number) => void
+  onChange: (denom: string) => void
   value: string
   small?: boolean
   noSearch?: boolean
 }
 
-const ChainList = ({ list, onChange, value, small, noSearch }: Props) => {
+const AssetList = ({ list, onChange, value, small, noSearch }: Props) => {
   return (
     <div className={styles.options}>
       <WithSearchInput disabled={noSearch} inline gap={4}>
@@ -33,23 +33,28 @@ const ChainList = ({ list, onChange, value, small, noSearch }: Props) => {
             )}
           >
             {list
+              .filter(Boolean)
               .filter(
                 ({ denom, symbol }) =>
-                  denom.toLowerCase().includes(search.toLowerCase()) ||
-                  symbol.toLowerCase().includes(search.toLowerCase())
+                  (denom ?? "")
+                    .toLowerCase()
+                    .includes((search ?? "").toLowerCase()) ||
+                  (symbol ?? "")
+                    .toLowerCase()
+                    .includes((search ?? "").toLowerCase())
               )
-              .map(({ denom, symbol, icon }, index) => (
+              .map(({ denom, symbol, icon }) => (
                 <button
-                  className={symbol === value ? styles.active : ""}
+                  className={denom === value ? styles.active : ""}
                   key={denom}
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    onChange(denom, index)
+                    onChange(denom)
                   }}
                 >
-                  <img src={icon} alt={denom} />
-                  {symbol}
+                  {icon && <img src={icon} alt={denom} />}
+                  {symbol ?? denom}
                 </button>
               ))}
           </div>
@@ -59,4 +64,4 @@ const ChainList = ({ list, onChange, value, small, noSearch }: Props) => {
   )
 }
 
-export default ChainList
+export default AssetList

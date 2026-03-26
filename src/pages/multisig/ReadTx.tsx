@@ -12,6 +12,8 @@ const ReadTx = (props: PropsWithChildren<{ tx: string }>) => {
   const lcd = useInterchainLCDClient()
 
   const decodeTx = (encoded: string) => {
+    if (!lcd) return
+
     try {
       return lcd.tx.decode(encoded)
     } catch {
@@ -21,6 +23,7 @@ const ReadTx = (props: PropsWithChildren<{ tx: string }>) => {
 
   const render = () => {
     if (!encoded) return <Wrong>{t("Tx is not defined")}</Wrong>
+    if (!lcd) return <Wrong>{t("LCD client is not available")}</Wrong>
 
     const tx = decodeTx(encoded)
     if (!tx) return <Wrong>{t("Invalid tx")}</Wrong>

@@ -6,7 +6,10 @@ import { useChainID, useNetwork } from "data/wallet"
 export const useInterchainLCDClient = () => {
   const network = useNetwork()
 
-  const lcdClient = useMemo(() => new InterchainLCDClient(network), [network])
+  const lcdClient = useMemo(() => {
+    if (!network || Object.keys(network).length === 0) return undefined
+    return new InterchainLCDClient(network)
+  }, [network])
 
   return lcdClient
 }
@@ -15,10 +18,14 @@ export const useLCDClient = () => {
   const network = useNetwork()
   const chainID = useChainID()
 
-  const lcdClient = useMemo(
-    () => new LCDClient({ ...network[chainID], URL: network[chainID].lcd }),
-    [network, chainID]
-  )
+  const lcdClient = useMemo(() => {
+    if (!network || !chainID || !network[chainID]) return undefined
+
+    return new LCDClient({
+      ...network[chainID],
+      URL: network[chainID].lcd,
+    })
+  }, [network, chainID])
 
   return lcdClient
 }

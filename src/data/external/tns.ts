@@ -1,16 +1,9 @@
 import { useQuery } from "react-query"
-import { Buffer } from "buffer"
 import keccak256 from "keccak256"
 import { queryKey, RefetchOptions } from "../query"
 import { useInterchainLCDClient } from "../queries/lcdClient"
 import { useTerraContracts } from "../Terra/TerraAssets"
 
-/**
- * Resolve terra address from a domain name.
- *
- * @param name - A TNS identifier such as "alice.ust"
- * @returns The terra address of the specified name, null if not resolvable
- */
 export const useTnsAddress = (name: string) => {
   const lcd = useInterchainLCDClient()
   const { data: contracts } = useTerraContracts()
@@ -18,20 +11,11 @@ export const useTnsAddress = (name: string) => {
   return useQuery(
     [queryKey.TNS, name],
     async () => {
-      if (!contracts) return
+      if (!contracts || !lcd) return
 
       const { tnsRegistry: registry } = contracts
-
       if (!registry) return
 
-      /**
-       * Get the resolver address of a given domain name.
-       *
-       * @param name - A TNS identifier such as "alice.ust"
-       * @returns The Resolver contract address of the specified name, null if the domain does not exist.
-       *
-       * @see https://docs.ens.domains/#ens-architecture for the role of Resolver Contract
-       */
       const { resolver } = await lcd.wasm.contractQuery<{ resolver: string }>(
         registry,
         { get_record: { name } }
@@ -46,16 +30,13 @@ export const useTnsAddress = (name: string) => {
 
       return address
     },
-    { ...RefetchOptions.INFINITY, enabled: name.endsWith(".ust") }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(name?.endsWith(".ust") && contracts && lcd),
+    }
   )
 }
 
-/**
- * Resolve TNS name from a terra address.
- *
- * @param address - A terra address
- * @returns The TNS name of the specified address, null if not resolvable
- */
 export const useTnsName = (address: string) => {
   const lcd = useInterchainLCDClient()
   const { data: contracts } = useTerraContracts()
@@ -63,10 +44,9 @@ export const useTnsName = (address: string) => {
   return useQuery(
     [queryKey.TNS, address],
     async () => {
-      if (!contracts || !address) return
+      if (!contracts || !address || !lcd) return
 
       const { tnsReverseRecord: reverseRecord } = contracts
-
       if (!reverseRecord) return
 
       const { name } = await lcd.wasm.contractQuery<{ name: string | null }>(
@@ -76,38 +56,29 @@ export const useTnsName = (address: string) => {
 
       return name
     },
-    { ...RefetchOptions.INFINITY, enabled: Boolean(contracts) }
+    {
+      ...RefetchOptions.INFINITY,
+      enabled: Boolean(contracts && address && lcd),
+    }
   )
 }
 
-/**
- * Generate a unique hash for any valid domain name.
- *
- * @param name - A TNS identifier such as "alice.ust"
- * @returns The result of namehash function in a {@link Buffer} form
- *
- * @see https://docs.ens.domains/contract-api-reference/name-processing#hashing-names
- * for ENS Terminology
- *
- * @see https://eips.ethereum.org/EIPS/eip-137#namehash-algorithm
- * for namehash algorithm specification proposed in EIP-137
- */
-function namehash(name: string): Buffer {
+function namehash(name: string): Uint8Array {
   if (name) {
     const [label, remainder] = name.split(".")
-    return keccak256(Buffer.concat([namehash(remainder), keccak256(label)]))
+    const parent = namehash(remainder)
+    const labelHash = Uint8Array.from(keccak256(label))
+
+    const combined = new Uint8Array(parent.length + labelHash.length)
+    combined.set(parent, 0)
+    combined.set(labelHash, parent.length)
+
+    return Uint8Array.from(keccak256(combined))
   }
 
-  return Buffer.from("".padStart(64, "0"), "hex")
+  return new Uint8Array(32)
 }
 
-/**
- * Generate the output of the namehash function in a form of number array
- * which is supported by the contract query.
- *
- * @param name - A TNS identifier such as "alice.ust"
- * @returns The result of namehash function in a number array format
- */
 function node(name: string): number[] {
-  return Array.from(Uint8Array.from(namehash(name)))
+  return Array.from(namehash(name))
 }

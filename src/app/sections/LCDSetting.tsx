@@ -1,4 +1,3 @@
-import { useNetworkName, useNetworkOptions } from "data/wallet"
 import { useForm } from "react-hook-form"
 import { Form, FormItem, Input } from "components/form"
 import { useTranslation } from "react-i18next"
@@ -12,7 +11,7 @@ import { LoadingCircular } from "components/feedback"
 import ClearIcon from "@mui/icons-material/Clear"
 import CheckIcon from "@mui/icons-material/Check"
 import { Flex } from "components/layout"
-import { useCustomLCDs } from "utils/localStorage"
+import { useCustomLCDs, useSelectedDisplayChain } from "utils/localStorage"
 import StandardDropdown from "components/form/StandardDropDown"
 
 interface FormValues {
@@ -22,54 +21,53 @@ interface FormValues {
 }
 
 const LCDSetting = () => {
-  const networkName = useNetworkName()
-  const networkOptions = useNetworkOptions()
+  const { selectedDisplayChain } = useSelectedDisplayChain()
   const { networks } = useNetworks()
   const { t } = useTranslation()
   const { customLCDs, changeCustomLCDs } = useCustomLCDs()
+
+  const networkOptions = useMemo(
+    () => [{ value: "all", label: "All Chains" }],
+    []
+  )
 
   const [networkIndex, setNetworkIndex] = useState(0)
 
   const form = useForm<FormValues>({ mode: "onChange" })
   const {
     register,
-    //trigger,
     watch,
     setValue,
     handleSubmit,
     formState: { errors },
   } = form
+
   const { network, chainID, lcd } = watch()
+
   const networksList = useMemo(
     () =>
-      Object.values(networks[network] ?? {})
+      (Object.values(networks ?? {}) as any[])
         .sort((a, b) => {
           if (a?.prefix === "terra") return -1
           if (b?.prefix === "terra") return 1
           return 0
         })
         .map(({ chainID }) => chainID),
-    [networks, network]
+    [networks]
   )
 
   useEffect(() => {
     if (network === undefined) {
-      if (networkName === "testnet") {
-        setNetworkIndex(1)
-        setValue("network", networkOptions[1].value)
-      } else if (networkName === "classic") {
-        setNetworkIndex(2)
-        setValue("network", networkOptions[2].value)
-      } else {
-        setNetworkIndex(0)
-        setValue("network", networkOptions[0].value)
-      }
+      setNetworkIndex(0)
+      setValue("network", "all")
     }
-  }, [networkOptions, setValue, network, networkIndex, networkName])
+  }, [network, setValue])
 
   useEffect(() => {
-    setValue("chainID", networksList[0])
-  }, [setValue, networksList])
+    if (!chainID) {
+      setValue("chainID", selectedDisplayChain || networksList[0] || "")
+    }
+  }, [setValue, chainID, selectedDisplayChain, networksList])
 
   useEffect(() => {
     setValue("lcd", customLCDs[chainID] ?? "")
@@ -78,13 +76,11 @@ const LCDSetting = () => {
   const { data: errorMessage, isLoading } = useValidateLCD(
     lcd,
     chainID,
-    customLCDs[chainID] !== lcd
+    !!chainID && customLCDs[chainID] !== lcd
   )
 
   const isDisabled = !!errorMessage || isLoading
   const isSaved = (!customLCDs[chainID] && !lcd) || customLCDs[chainID] === lcd
-
-  if (!networkOptions) return null
 
   function renderIsValidLCD() {
     if (!lcd) {
@@ -120,7 +116,6 @@ const LCDSetting = () => {
 
   function submit({ chainID, lcd }: FormValues) {
     if (isDisabled) return
-
     changeCustomLCDs(chainID, lcd)
   }
 
@@ -157,7 +152,7 @@ const LCDSetting = () => {
       >
         <Input
           type="text"
-          placeholder={networks[network]?.[chainID]?.lcd}
+          placeholder={networks?.[chainID]?.lcd}
           actionButton={
             lcd || !isSaved
               ? {
@@ -171,7 +166,9 @@ const LCDSetting = () => {
           })}
         />
       </FormItem>
+
       <div className={styles.button__padding}></div>
+
       <section className={styles.button__conainer}>
         <Button color="primary" disabled={isDisabled || isSaved} type="submit">
           {isLoading ? (
