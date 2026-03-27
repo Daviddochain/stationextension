@@ -46,6 +46,7 @@ const App = () => {
   const { replaceKeplr } = useReplaceKeplr()
 
   useEffect(() => {
+    if (!chainID) return
     storeNetwork({ ...networks[name][chainID], name }, networks[name])
   }, [networks, chainID, name])
 

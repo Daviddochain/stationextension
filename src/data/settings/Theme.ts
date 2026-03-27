@@ -70,9 +70,12 @@ export const useValidateTheme = () => {
   const networkName = useNetworkName()
   const chainID = useChainID()
   const address = useAddress()
-  const { data: delegations } = useDelegations(chainID)
+
+  const { data: delegations } = useDelegations(chainID ?? "")
+
   if (debug.theme || networkName !== "mainnet") return always(true)
-  if (!address || !delegations) return always(true)
+  if (!chainID || !address || !delegations) return always(true)
+
   const staked = calcDelegationsTotal(delegations)
   return (theme: Theme) => validateTheme(staked, theme)
 }

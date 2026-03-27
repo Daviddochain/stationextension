@@ -11,7 +11,6 @@ import { useNativeDenoms } from "data/token"
 import styles from "./NetWorth.module.scss"
 import { capitalize } from "@mui/material"
 import { FIAT_RAMP, GUARDARIAN_API_KEY } from "config/constants"
-// import { Add as AddIcon, Send as SendIcon } from "@mui/icons-material"
 import classNames from "classnames"
 import { useMemo } from "react"
 import qs from "qs"
@@ -31,6 +30,7 @@ const NetWorth = () => {
   const networks = useNetwork()
 
   const availableGasDenoms = useMemo(() => {
+    if (!chainID) return []
     return Object.keys(networks[chainID]?.gasPrices ?? {})
   }, [chainID, networks])
 
@@ -44,7 +44,6 @@ const NetWorth = () => {
   const addresses = useInterchainAddresses()
   const networkName = useNetworkName()
 
-  // TODO: show CW20 balances and staked tokens
   const coinsValue = coins?.reduce((acc, { amount, denom }) => {
     const { token, decimals, symbol } = readNativeDenom(denom)
     return (

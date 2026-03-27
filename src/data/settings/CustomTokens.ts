@@ -21,19 +21,23 @@ const useCustomTokens = <T extends CustomToken>({ type, key }: Params<T>) => {
   const chainID = useChainID()
 
   const scopedTokens = customTokens ?? {}
-  const list = (scopedTokens[networkName]?.[type] ?? []) as T[]
+  const scopeKey = chainID ?? networkName
+
+  const list = ((scopeKey && scopedTokens[scopeKey]?.[type]) ?? []) as T[]
 
   const getIsAdded = (param: T) =>
     !!list.find((item) => item[key] === param[key])
 
   const updateList = (nextList: T[]) => {
+    if (!scopeKey) return
+
     const prev = {
-      [networkName]: DefaultCustomTokensItem(chainID),
+      [scopeKey]: DefaultCustomTokensItem(chainID ?? scopeKey),
       ...scopedTokens,
     }
 
     const next = update(prev, {
-      [networkName]: {
+      [scopeKey]: {
         [type]: { $set: nextList },
       },
     })

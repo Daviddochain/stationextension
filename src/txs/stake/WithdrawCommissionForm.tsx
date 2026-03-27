@@ -13,36 +13,25 @@ import { Form, FormArrow, Input } from "components/form"
 import { TokenCard, TokenCardGrid } from "components/token"
 import Tx from "../Tx"
 
-// TODO: make this interchain
 const WithdrawCommissionForm = () => {
   const currency = useCurrency()
   const address = useAddress()
   const chainID = useChainID()
   const calcValue = useMemoizedCalcValue()
 
-  /* form */
   const { handleSubmit } = useForm({ mode: "onChange" })
 
-  /* tx */
+  const { data: validatorCommission } = useValidatorCommission()
+  const { data: withdrawAddress } = useWithdrawAddress()
+
   const createTx = useCallback(() => {
-    if (!address) return
+    if (!address || !chainID) return
     const validatorAddress = ValAddress.fromAccAddress(address, "terra")
     const msgs = [new MsgWithdrawValidatorCommission(validatorAddress)]
     return { msgs, chainID }
   }, [address, chainID])
 
-  /* fee */
   const estimationTxValues = useMemo(() => ({}), [])
-
-  const tx = {
-    estimationTxValues,
-    createTx,
-    chain: chainID,
-  }
-
-  /* render */
-  const { data: validatorCommission } = useValidatorCommission()
-  const { data: withdrawAddress } = useWithdrawAddress()
 
   const renderCommission = () => {
     if (!validatorCommission) return null
@@ -76,6 +65,14 @@ const WithdrawCommissionForm = () => {
         <Input defaultValue={withdrawAddress} readOnly />
       </>
     )
+  }
+
+  if (!chainID) return null
+
+  const tx = {
+    estimationTxValues,
+    createTx,
+    chain: chainID,
   }
 
   return (

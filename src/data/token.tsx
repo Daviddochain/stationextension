@@ -10,7 +10,7 @@ import {
   OSMO_ICON,
 } from "./external/osmosis"
 import { useCW20Whitelist, useIBCWhitelist } from "./Terra/TerraAssets"
-import { useWhitelist } from "./queries/chains"
+import { getResolvedChainID, useWhitelist } from "./queries/chains"
 import { useNetwork } from "./wallet"
 import { getChainIDFromAddress } from "utils/bech32"
 
@@ -131,9 +131,11 @@ export const useNativeDenoms = () => {
 
     if (tokenType === TokenType.FACTORY) {
       const tokenAddress = denom.split(/[/:]/)[1]
-      const detectedChainID = getChainIDFromAddress(tokenAddress, networks)
-      if (detectedChainID) {
-        factoryIcon = networks[detectedChainID]?.icon
+      if (tokenAddress) {
+        const detectedChainID = getChainIDFromAddress(tokenAddress, networks)
+        if (detectedChainID && networks?.[detectedChainID]) {
+          factoryIcon = networks[detectedChainID].icon
+        }
       }
     }
 
@@ -141,7 +143,6 @@ export const useNativeDenoms = () => {
       factoryIcon = OSMO_ICON
     }
 
-    // whitelist match
     if (chainID) {
       const tokenID = `${chainID}:${denom}`
       if (whitelist[tokenID]) return whitelist[tokenID]
@@ -152,28 +153,30 @@ export const useNativeDenoms = () => {
       if (tokenDetails) return tokenDetails
     }
 
-    // ibc match SAFE
     const ibcToken = chainID
       ? ibcDenoms?.[`${chainID}:${denom}`]
-      : Object.entries(ibcDenoms ?? {}).find(
-          ([k]) => k.split(":")[1] === denom
+      : Object.entries(ibcDenoms ?? {}).find(([, value]) =>
+          Boolean(
+            getResolvedChainID(value) &&
+              value.token &&
+              value.token.endsWith(`:${denom}`)
+          )
         )?.[1]
+
+    const ibcChainID = getResolvedChainID(ibcToken)
 
     if (
       ibcToken &&
       ibcToken.token &&
       whitelist[ibcToken.token] &&
-      (!chainID || ibcToken.chainID === chainID)
+      (!chainID || ibcChainID === chainID)
     ) {
       return {
         ...whitelist[ibcToken.token],
         type: tokenType,
-        // @ts-expect-error
-        chains: [ibcToken.chainID],
       }
     }
 
-    // LUNA / LUNC split
     if (denom === "uluna") {
       if (chainID === "columbus-5") {
         return {
@@ -184,7 +187,9 @@ export const useNativeDenoms = () => {
           decimals: 6,
           isNonWhitelisted: false,
         }
-      } else {
+      }
+
+      if (chainID === "phoenix-1") {
         return {
           token: denom,
           symbol: "LUNA",
@@ -196,8 +201,8 @@ export const useNativeDenoms = () => {
       }
     }
 
-    const CHAIN_ICON =
-      networks?.[chainID ?? ""]?.icon ||
+    const chainIcon = chainID ? networks?.[chainID]?.icon : undefined
+    const fallbackIcon =
       "https://assets.terraclassic.community/icon/svg/Terra.svg"
 
     return (
@@ -213,7 +218,9 @@ export const useNativeDenoms = () => {
             ? "https://station-assets.terraclassic.community/img/chains/Stride.png"
             : (tokenType === TokenType.FACTORY ||
                 tokenType === TokenType.GAMM) &&
-              factoryIcon) || CHAIN_ICON,
+              factoryIcon) ||
+          chainIcon ||
+          fallbackIcon,
         decimals,
         isNonWhitelisted: true,
       }

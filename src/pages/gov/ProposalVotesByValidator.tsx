@@ -44,10 +44,13 @@ const ProposalVotesByValidator = ({ id }: { id: number }) => {
   const [tab, setTab] = useState<Vote.Option>()
   const [delegatedOnly, setDelegatedOnly] = useState(false)
 
-  const { data: delegations, ...delegationsState } = useDelegations(chainID)
+  const { data: delegations, ...delegationsState } = useDelegations(
+    chainID ?? ""
+  )
   const { data: TerraProposal, ...TerraProposalState } = useTerraProposal(id)
-  const { data: TerraValidators, ...TerraValidatorsState } =
-    useValidators(chainID)
+  const { data: TerraValidators, ...TerraValidatorsState } = useValidators(
+    chainID ?? ""
+  )
 
   const state = combineState(
     delegationsState,

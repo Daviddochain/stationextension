@@ -25,19 +25,16 @@ interface TxValues {
   label?: string
 }
 
-// TODO: make this interchain
 const InstantiateContractForm = () => {
   const { t } = useTranslation()
   const address = useAddress()
   const network = useNetwork()
   const bankBalance = useBankBalance()
   const chainID = useChainID()
-
-  /* tx context */
-  const defaultItem = { denom: network[chainID].baseAsset }
   const { findDecimals } = useIBCHelper()
 
-  /* form */
+  const defaultItem = { denom: chainID ? network[chainID].baseAsset : "" }
+
   const form = useForm<TxValues>({
     mode: "onChange",
     defaultValues: { coins: [defaultItem] },
@@ -49,10 +46,9 @@ const InstantiateContractForm = () => {
   const { coins } = values
   const { fields, append, remove } = useFieldArray({ control, name: "coins" })
 
-  /* tx */
   const createTx = useCallback(
     ({ id, msg, label, ...values }: TxValues) => {
-      if (!address || !(id && msg)) return
+      if (!address || !chainID || !(id && msg)) return
       if (!validateMsg(msg)) return
 
       const admin = values.admin || undefined
@@ -75,8 +71,9 @@ const InstantiateContractForm = () => {
     [address, chainID, findDecimals]
   )
 
-  /* fee */
   const estimationTxValues = useMemo(() => values, [values])
+
+  if (!chainID) return null
 
   const tx = {
     estimationTxValues,
@@ -123,10 +120,7 @@ const InstantiateContractForm = () => {
             />
           </FormItem>
 
-          <FormItem
-            label="Init msg" // do not translate this
-            error={errors.msg?.message}
-          >
+          <FormItem label="Init msg" error={errors.msg?.message}>
             <EditorInput {...register("msg", { validate: validate.msg() })} />
           </FormItem>
 

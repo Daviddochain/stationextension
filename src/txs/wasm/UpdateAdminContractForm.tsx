@@ -12,31 +12,29 @@ interface TxValues {
   new_admin?: string
 }
 
-// TODO: make this interchain
 const UpdateAdminContractForm = ({ contract }: { contract: AccAddress }) => {
   const { t } = useTranslation()
 
   const address = useAddress()
   const chainID = useChainID()
 
-  /* form */
   const form = useForm<TxValues>({ mode: "onChange" })
   const { register, watch, handleSubmit, formState } = form
   const { errors } = formState
   const values = watch()
 
-  /* tx */
   const createTx = useCallback(
     ({ new_admin }: TxValues) => {
-      if (!address || !new_admin) return
+      if (!address || !chainID || !new_admin) return
       const msgs = [new MsgUpdateContractAdmin(address, new_admin, contract)]
       return { msgs, chainID }
     },
     [address, chainID, contract]
   )
 
-  /* fee */
   const estimationTxValues = useMemo(() => values, [values])
+
+  if (!chainID) return null
 
   const tx = {
     estimationTxValues,

@@ -8,7 +8,13 @@ export const useInterchainLCDClient = () => {
 
   const lcdClient = useMemo(() => {
     if (!network || Object.keys(network).length === 0) return undefined
-    return new InterchainLCDClient(network)
+
+    try {
+      return new InterchainLCDClient(network)
+    } catch (err) {
+      console.error("Failed to create InterchainLCDClient:", err)
+      return undefined
+    }
   }, [network])
 
   return lcdClient
@@ -19,12 +25,43 @@ export const useLCDClient = () => {
   const chainID = useChainID()
 
   const lcdClient = useMemo(() => {
-    if (!network || !chainID || !network[chainID]) return undefined
+    if (!network || !chainID) return undefined
 
-    return new LCDClient({
-      ...network[chainID],
-      URL: network[chainID].lcd,
-    })
+    const chain = network[chainID]
+    if (!chain || !chain.lcd) return undefined
+
+    try {
+      return new LCDClient({
+        ...chain,
+        URL: chain.lcd,
+      })
+    } catch (err) {
+      console.error("Failed to create LCDClient:", err)
+      return undefined
+    }
+  }, [network, chainID])
+
+  return lcdClient
+}
+
+export const useLCDClientForChain = (chainID?: string) => {
+  const network = useNetwork()
+
+  const lcdClient = useMemo(() => {
+    if (!network || !chainID) return undefined
+
+    const chain = network[chainID]
+    if (!chain || !chain.lcd) return undefined
+
+    try {
+      return new LCDClient({
+        ...chain,
+        URL: chain.lcd,
+      })
+    } catch (err) {
+      console.error(`Failed to create LCDClient for chain ${chainID}:`, err)
+      return undefined
+    }
   }, [network, chainID])
 
   return lcdClient

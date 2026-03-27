@@ -58,12 +58,22 @@ export function getChainIdFromAddress(
   address: string,
   chains: Record<string, InterchainNetwork>
 ) {
-  if (!address) return ""
+  if (!address) return undefined
 
-  return (
-    Object.values(chains ?? {}).find(({ prefix }) => address.startsWith(prefix))
-      ?.chainID ?? ""
-  ).toLowerCase()
+  const matches = Object.values(chains ?? {}).filter(({ prefix }) =>
+    address.startsWith(prefix)
+  )
+
+  if (matches.length !== 1) return undefined
+
+  return matches[0]?.chainID
+}
+
+export function getResolvedChainID(entry?: {
+  chain?: string
+  chainID?: string
+}): string | undefined {
+  return entry?.chainID ?? entry?.chain
 }
 
 export function useIBCChannels() {
@@ -81,6 +91,8 @@ export function useIBCChannels() {
       tokenAddress: string
       icsChannel?: string
     }): string | undefined => {
+      if (!from || !to) return undefined
+
       const isCW20 = AccAddress.validate(tokenAddress)
 
       if (isCW20) {
@@ -104,6 +116,7 @@ export function useIBCChannels() {
       from: string
       to: string
     }): string | undefined => {
+      if (!from || !to) return undefined
       return networks[from]?.icsChannels?.[to]?.contract
     },
   }

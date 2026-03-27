@@ -67,22 +67,22 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
     [
       queryKey.tx.create,
       "tx" in props &&
-        props.tx.msgs.map((m) => m.toData(network?.[chainID]?.isClassic)),
-      addresses?.[chainID],
-      network?.[chainID],
+        props.tx.msgs.map((m) => m.toData(network?.[chainID ?? ""]?.isClassic)),
+      addresses?.[chainID ?? ""],
+      network?.[chainID ?? ""],
     ],
     async () => {
       if (!("tx" in props)) return 0
-      if (!lcd) return 0
+      if (!lcd || !chainID) return 0
 
       const { tx } = props
 
       try {
-        if (!addresses || !addresses[tx?.chainID] || !network?.[tx?.chainID]) {
+        if (!addresses || !addresses[chainID] || !network?.[chainID]) {
           return 0
         }
 
-        const { baseAsset, gasPrices } = network[tx.chainID]
+        const { baseAsset, gasPrices } = network[chainID]
         const feeDenom =
           baseAsset && gasPrices?.[baseAsset] !== undefined
             ? baseAsset
@@ -91,7 +91,7 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
         if (!feeDenom) return 0
 
         const unsignedTx = await lcd.tx.create(
-          [{ address: addresses[tx.chainID] }],
+          [{ address: addresses[chainID] }],
           {
             ...tx,
             feeDenoms: [feeDenom],
@@ -108,18 +108,21 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
       ...RefetchOptions.INFINITY,
       refetchOnWindowFocus: false,
       enabled:
-        "tx" in props && !props.tx.fee?.gas_limit && !!addresses?.[chainID],
+        "tx" in props &&
+        !!chainID &&
+        !props.tx.fee?.gas_limit &&
+        !!addresses?.[chainID],
     }
   )
 
   let fee: Fee | undefined
 
-  if ("tx" in props && network?.[props.tx?.chainID]) {
+  if ("tx" in props && chainID && network?.[chainID]) {
     const { tx } = props
     fee = tx.fee
 
     if (!tx.fee?.gas_limit) {
-      const { baseAsset, gasPrices, gasAdjustment } = network[tx.chainID]
+      const { baseAsset, gasPrices, gasAdjustment } = network[chainID]
       const gas = Math.ceil((estimatedGas ?? 0) * gasAdjustment)
 
       const feeDenom =
@@ -145,11 +148,12 @@ const ConfirmTx = (props: TxRequest | SignBytesRequest) => {
   const toPostMultisigTx = useToPostMultisigTx()
 
   const submit = async ({ password }: Values) => {
+    if (!chainID) return
     setSubmitting(true)
 
     if ("tx" in props) {
       const { requestType, tx, signMode } = props
-      const txOptions = { ...tx, fee }
+      const txOptions = { ...tx, fee, chainID }
 
       try {
         if (disabled) throw new Error(disabled)

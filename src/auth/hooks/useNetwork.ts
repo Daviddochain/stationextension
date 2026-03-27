@@ -1,4 +1,5 @@
 import { atom, useRecoilState, useRecoilValue } from "recoil"
+import { useMemo } from "react"
 import { useNetworks } from "app/InitNetworks"
 import { getStoredNetwork, storeNetwork } from "../scripts/network"
 import { walletState } from "./useAuth"
@@ -57,6 +58,18 @@ export const useNetworkName = () => {
   return "all"
 }
 
-export const useChainID = () => {
-  return ""
+export const useChainID = (): string | undefined => {
+  const [storedNetwork] = useNetworkState()
+  const networks = useNetwork()
+
+  return useMemo(() => {
+    const entries = Object.entries(networks ?? {})
+    if (!entries.length) return undefined
+
+    if (storedNetwork && storedNetwork !== "all" && networks[storedNetwork]) {
+      return storedNetwork
+    }
+
+    return entries[0][0]
+  }, [networks, storedNetwork])
 }

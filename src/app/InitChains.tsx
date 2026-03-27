@@ -29,7 +29,7 @@ const normalizeTokenRecord = <T extends Record<string, any>>(obj?: T): T => {
   return Object.fromEntries(
     Object.entries(obj ?? {}).map(([key, value]) => [
       key,
-      value && typeof value === "object"
+      value && typeof value === "object" && !Array.isArray(value)
         ? {
             ...value,
             icon: normalizeAssetUrl(value.icon),
@@ -60,15 +60,69 @@ const denomsArrayToWhitelist = (denoms: any[]): WhitelistData["whitelist"] => {
   }, {} as WhitelistData["whitelist"])
 }
 
+const sanitizeIbcDenoms = (obj: any): WhitelistData["ibcDenoms"] => {
+  const entries = Object.entries(obj ?? {})
+
+  const isFlatRecord = entries.every(([, value]) => {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return false
+    const record = value as { token?: unknown; chainID?: unknown }
+    return Boolean(record.token && record.chainID)
+  })
+
+  if (isFlatRecord) {
+    return Object.fromEntries(
+      entries.filter(([, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          return false
+
+        const record = value as { token?: unknown; chainID?: unknown }
+        return Boolean(record.token && record.chainID)
+      })
+    ) as WhitelistData["ibcDenoms"]
+  }
+
+  return Object.fromEntries(
+    entries.map(([key, value]) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return [key, {}]
+      }
+
+      return [
+        key,
+        Object.fromEntries(
+          Object.entries(value).filter(([, nestedValue]) => {
+            if (
+              !nestedValue ||
+              typeof nestedValue !== "object" ||
+              Array.isArray(nestedValue)
+            ) {
+              return false
+            }
+
+            const record = nestedValue as { token?: unknown; chainID?: unknown }
+            return Boolean(record.token && record.chainID)
+          })
+        ),
+      ]
+    })
+  ) as WhitelistData["ibcDenoms"]
+}
+
 const InitChains = ({ children }: PropsWithChildren<{}>) => {
-  const [whitelist, setWhitelist] = useState<WhitelistData["whitelist"]>()
-  const [ibcDenoms, setIbcDenoms] = useState<WhitelistData["ibcDenoms"]>()
+  const [whitelist, setWhitelist] = useState<WhitelistData["whitelist"]>({})
+  const [ibcDenoms, setIbcDenoms] = useState<WhitelistData["ibcDenoms"]>({})
+  const [loaded, setLoaded] = useState(false)
   const legacyWhitelist: WhitelistData["legacyWhitelist"] = {}
 
   useEffect(() => {
-    axios
-      .get("/denoms.json", { baseURL: STATION_ASSETS })
-      .then(({ data }) => {
+    Promise.allSettled([
+      axios.get("/denoms.json", { baseURL: STATION_ASSETS }),
+      axios.get("/ibc_tokens.json", { baseURL: STATION_ASSETS }),
+    ]).then(([denomsResult, ibcResult]) => {
+      if (denomsResult.status === "fulfilled") {
+        const data = denomsResult.value.data
+
         if (Array.isArray(data)) {
           setWhitelist(denomsArrayToWhitelist(data))
         } else if (data && typeof data === "object") {
@@ -77,29 +131,37 @@ const InitChains = ({ children }: PropsWithChildren<{}>) => {
           console.error("InitChains: unexpected denoms.json format", data)
           setWhitelist({})
         }
-      })
-      .catch((error) =>
-        console.error("InitChains: failed to fetch denoms.json", error)
-      )
+      } else {
+        console.error(
+          "InitChains: failed to fetch denoms.json",
+          denomsResult.reason
+        )
+        setWhitelist({})
+      }
 
-    axios
-      .get("/ibc_tokens.json", { baseURL: STATION_ASSETS })
-      .then(({ data }) => {
-        // support BOTH flat and { all: ... } formats
+      if (ibcResult.status === "fulfilled") {
+        const data = ibcResult.value.data
+
         if (data && typeof data === "object" && !Array.isArray(data)) {
           const resolved = data.all ?? data
-          setIbcDenoms(normalizeTokenRecord(resolved))
+          setIbcDenoms(sanitizeIbcDenoms(normalizeTokenRecord(resolved)))
         } else {
           console.error("InitChains: unexpected ibc_tokens.json format", data)
           setIbcDenoms({})
         }
-      })
-      .catch((error) =>
-        console.error("InitChains: failed to fetch ibc_tokens.json", error)
-      )
+      } else {
+        console.error(
+          "InitChains: failed to fetch ibc_tokens.json",
+          ibcResult.reason
+        )
+        setIbcDenoms({})
+      }
+
+      setLoaded(true)
+    })
   }, [])
 
-  if (!(whitelist && ibcDenoms)) return null
+  if (!loaded) return null
 
   return (
     <WhitelistProvider value={{ whitelist, ibcDenoms, legacyWhitelist }}>

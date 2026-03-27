@@ -10,11 +10,12 @@ const WithdrawCommissionTx = () => {
   const { t } = useTranslation()
   const address = useAddress()
   const chainID = useChainID()
-  const { data: validators, ...state } = useValidators(chainID)
-  const moniker = getConnectedMoniker(address, validators)
+
+  const { data: validators, ...state } = useValidators(chainID ?? "")
+  const moniker = getConnectedMoniker(address, validators ?? [])
 
   const render = () => {
-    if (!validators) return null
+    if (!chainID || !validators) return null
     if (!moniker) return <Wrong>{t("Validator account not connected")}</Wrong>
 
     return <WithdrawCommissionForm />

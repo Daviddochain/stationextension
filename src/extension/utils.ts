@@ -124,13 +124,21 @@ export const parseDefault = (
 }
 
 export const useParseTx = () => {
-  // for lecacy support
   const defaultChainID = useChainID()
   const networks = useNetwork()
 
   return useCallback(
     (request: PrimitiveTxRequest): TxRequest["tx"] => {
       const { msgs, fee, memo, chainID } = request
+      const activeChainID = chainID ?? defaultChainID
+
+      if (!activeChainID || !networks?.[activeChainID]) {
+        return {
+          msgs: [],
+          chainID: "",
+        } as CreateTxOptions
+      }
+
       const isProto = "@type" in JSON.parse(msgs[0])
       const shouldOverrideClassic =
         isProto &&
@@ -149,23 +157,20 @@ export const useParseTx = () => {
                 JSON.parse(msg),
                 shouldOverrideClassic
                   ? false
-                  : networks[chainID ?? defaultChainID].isClassic
+                  : networks[activeChainID].isClassic
               )
             ),
             fee: fee ? Fee.fromData(JSON.parse(fee)) : undefined,
             memo,
-            chainID: chainID ?? defaultChainID,
+            chainID: activeChainID,
           }
         : {
             msgs: msgs.map((msg) =>
-              Msg.fromAmino(
-                JSON.parse(msg),
-                networks[chainID ?? defaultChainID].isClassic
-              )
+              Msg.fromAmino(JSON.parse(msg), networks[activeChainID].isClassic)
             ),
             fee: fee ? Fee.fromAmino(JSON.parse(fee)) : undefined,
             memo,
-            chainID: chainID ?? defaultChainID,
+            chainID: activeChainID,
           }
     },
     [defaultChainID, networks]
@@ -186,7 +191,6 @@ export const toData = (result: any, isClassic?: boolean) => {
 /* helpers */
 export const getIsNativeMsgFromExternal = (origin: string) => {
   return (msg: Msg) => {
-    // TODO: fix that
     if (origin.includes("https://station.terraclassic.community")) return false
     const type = msg.toData()["@type"]
     return type !== "/terra.wasm.v1beta1.MsgExecuteContract"
@@ -200,8 +204,6 @@ export const getIsDangerousTx = ({ msgs }: CreateTxOptions) =>
   })
 
 export async function incomingRequest() {
-  // Requests from storage
-  // except for that is already success or failure
   return new Promise<boolean>((resolve) => {
     browser.storage?.local
       .get(["connect", "post", "sign"])

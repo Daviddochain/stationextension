@@ -28,7 +28,7 @@ const PostMultisigTxPage = () => {
   const [errorMessage, setErrorMessage] = useState<string>()
 
   const onCreated = (publicKey: LegacyAminoMultisigPublicKey) => {
-    if (publicKey.address("terra") !== addresses?.[chainID])
+    if (!chainID || publicKey.address("terra") !== addresses?.[chainID])
       setErrorMessage(t("Data does not match the connected wallet"))
     else setPublicKeyFromNetwork(publicKey)
   }
@@ -36,7 +36,7 @@ const PostMultisigTxPage = () => {
   /* render */
   const defaultValues = useDefaultValues()
   const render = () => {
-    if (!(account && addresses?.[chainID])) return null
+    if (!chainID || !(account && addresses?.[chainID])) return null
 
     if (!isWallet.multisig(wallet))
       return (

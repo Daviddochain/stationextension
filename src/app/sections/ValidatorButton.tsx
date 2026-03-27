@@ -6,8 +6,10 @@ import { LinkButton } from "components/general"
 const ValidatorButton = () => {
   const chainID = useChainID()
   const address = useAddress()
-  const { data: validators } = useValidators(chainID)
-  if (!address) return null
+  const { data: validators } = useValidators(chainID ?? "")
+
+  if (!chainID || !address) return null
+
   const moniker = getConnectedMoniker(address, validators ?? [])
   if (!moniker) return null
 

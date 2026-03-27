@@ -11,13 +11,17 @@ import styles from "./Staked.module.scss"
 
 const Staked = () => {
   const chainID = useChainID()
-  const { data: delegations, ...delegationsState } = useDelegations(chainID)
-  const { data: unbondings, ...unbondingsState } = useUnbondings(chainID)
+
+  const { data: delegations, ...delegationsState } = useDelegations(
+    chainID ?? ""
+  )
+  const { data: unbondings, ...unbondingsState } = useUnbondings(chainID ?? "")
   const { data: rewards, ...rewardsState } = useRewards()
+
   const state = combineState(delegationsState, unbondingsState, rewardsState)
 
   const render = () => {
-    if (!(delegations && unbondings && rewards)) return null
+    if (!chainID || !(delegations && unbondings && rewards)) return null
 
     const staked =
       delegations.length || unbondings.length || rewards.total.toArray().length

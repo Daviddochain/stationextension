@@ -10,13 +10,11 @@ interface TxValues {
   code: string
 }
 
-// TODO: make this interchain
 const StoreCodeForm = () => {
   const { t } = useTranslation()
   const address = useAddress()
   const chainID = useChainID()
 
-  /* form */
   const [file, setFile] = useState<File>()
   const form = useForm<TxValues>({ mode: "onChange" })
   const { watch, setValue, handleSubmit } = form
@@ -30,18 +28,18 @@ const StoreCodeForm = () => {
     if (file) store(file)
   }, [file, setValue])
 
-  /* tx */
   const createTx = useCallback(
     ({ code }: TxValues) => {
-      if (!address || !code) return
+      if (!address || !chainID || !code) return
       const msgs = [new MsgStoreCode(address, code)]
       return { msgs, chainID }
     },
     [address, chainID]
   )
 
-  /* fee */
   const estimationTxValues = useMemo(() => values, [values])
+
+  if (!chainID) return null
 
   const tx = {
     estimationTxValues,
@@ -67,7 +65,6 @@ const StoreCodeForm = () => {
 
 export default StoreCodeForm
 
-/* helpers */
 const readFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

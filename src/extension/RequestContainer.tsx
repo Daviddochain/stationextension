@@ -56,8 +56,6 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
   const defaultChainID = useChainID()
 
   useEffect(() => {
-    // Requests from storage
-    // except for that is already success or failure
     browser.storage?.local
       .get([
         "connect",
@@ -114,10 +112,7 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
       })
   }, [parseTx])
 
-  /* connect */
   const handleConnect = (origin: string, allow: boolean) => {
-    // Store allowed origin list
-    // Delete on reject
     browser.storage?.local
       .get(["connect"])
       .then(({ connect = { allowed: [] } }) =>
@@ -133,10 +128,7 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
       .then(() => setConnect(undefined))
   }
 
-  /* pubkey */
   const handlePubkey = () => {
-    // Store allowed origin list
-    // Delete on reject
     browser.storage?.local
       .set({
         pubkey: false,
@@ -144,12 +136,10 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
       .then(() => setPubkey(undefined))
   }
 
-  /* suggestChain */
   const handleSuggestChain: RequestContext["actions"]["chain"] = (
     request,
     success
   ) => {
-    // Store response on storage
     const type = "suggestChain"
     browser.storage?.local.get([type]).then((storage: ExtensionStorage) => {
       const list = storage[type] || []
@@ -163,13 +153,11 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
     })
   }
 
-  /* switchNetwork */
   const handleSwitchNetwork: RequestContext["actions"]["network"] = (
     request,
     success,
     message
   ) => {
-    // Store response on storage
     const type = "switchNetwork"
     browser.storage?.local.get([type]).then((storage: ExtensionStorage) => {
       const list = storage[type] || []
@@ -187,20 +175,20 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
     })
   }
 
-  /* post | sign */
   const handleTx: RequestContext["actions"]["tx"] = (
     requestType,
     request,
     response,
     password
   ) => {
+    if (!defaultChainID) return
+
     const timestamp = Date.now()
     browser.storage?.local.set({
       timestamp: password ? timestamp : null,
       encrypted: password ? encrypt(password, String(timestamp)) : null,
     })
 
-    // Store response on storage
     const type = requestType === "signBytes" ? "sign" : requestType
     browser.storage?.local.get([type]).then((storage: ExtensionStorage) => {
       const list = storage[type] || []
@@ -212,14 +200,13 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
         response.result,
         networks[defaultChainID]?.isClassic
       )
+
       const next = update(index, { ...list[index], ...response, result }, list)
       browser.storage?.local.set({ [type]: next }).then(() => setTx(undefined))
     })
   }
 
-  /* multisig */
   const handleMultisigTx = (request: PrimitiveDefaultRequest) => {
-    // Delete request
     browser.storage?.local.get(["post"]).then((storage: ExtensionStorage) => {
       const list = storage.post || []
       const next = list.filter(
@@ -230,7 +217,6 @@ const RequestContainer = ({ children }: PropsWithChildren<{}>) => {
     })
   }
 
-  /* context */
   const requests = { connect, pubkey, tx, chain, network }
   const actions = {
     connect: handleConnect,

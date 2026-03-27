@@ -14,23 +14,20 @@ interface TxValues {
   msg?: string
 }
 
-// TODO: make this interchain
 const MigrateContractForm = ({ contract }: { contract: AccAddress }) => {
   const { t } = useTranslation()
 
   const address = useAddress()
   const chainID = useChainID()
 
-  /* form */
   const form = useForm<TxValues>({ mode: "onChange" })
   const { register, watch, handleSubmit, formState } = form
   const { errors } = formState
   const values = watch()
 
-  /* tx */
   const createTx = useCallback(
     ({ id, msg }: TxValues) => {
-      if (!address || !(id && msg)) return
+      if (!address || !chainID || !(id && msg)) return
       if (!validateMsg(msg)) return
 
       const code_id = Number(id)
@@ -44,8 +41,9 @@ const MigrateContractForm = ({ contract }: { contract: AccAddress }) => {
     [address, chainID, contract]
   )
 
-  /* fee */
   const estimationTxValues = useMemo(() => values, [values])
+
+  if (!chainID) return null
 
   const tx = {
     estimationTxValues,
@@ -77,10 +75,7 @@ const MigrateContractForm = ({ contract }: { contract: AccAddress }) => {
             />
           </FormItem>
 
-          <FormItem
-            label="Migrate msg" // do not translate this
-            error={errors.msg?.message}
-          >
+          <FormItem label="Migrate msg" error={errors.msg?.message}>
             <EditorInput {...register("msg", { validate: validate.msg() })} />
           </FormItem>
 

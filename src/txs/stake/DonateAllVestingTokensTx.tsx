@@ -11,13 +11,15 @@ const DonateAllVestingTokensTx = () => {
   const { t } = useTranslation()
   const chainID = useChainID()
   const { data: account, ...accountState } = useAccount()
-  const { data: delegations, ...delegationsState } = useDelegations(chainID)
-  const { data: unbondings, ...unbondingsState } = useUnbondings(chainID)
+  const { data: delegations, ...delegationsState } = useDelegations(
+    chainID ?? ""
+  )
+  const { data: unbondings, ...unbondingsState } = useUnbondings(chainID ?? "")
 
   const state = combineState(accountState, delegationsState, unbondingsState)
 
   const render = () => {
-    if (!(account && delegations && unbondings)) return null
+    if (!chainID || !(account && delegations && unbondings)) return null
 
     if (!isVestingAccount(account))
       return <Wrong>{t("Vesting does not exist")}</Wrong>

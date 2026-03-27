@@ -18,7 +18,7 @@ const Vesting = () => {
   const readNativeDenom = useNativeDenoms()
   const chainID = useChainID()
 
-  if (!data) return null
+  if (!chainID || !data) return null
   if (!isVestingAccount(data)) return null
 
   const schedule = parseVestingSchedule(data)

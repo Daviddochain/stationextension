@@ -15,18 +15,17 @@ const DonateAllVestingTokensForm = ({ account }: { account: Account }) => {
   const schedule = parseVestingSchedule(account)
   const balance = schedule.amount.total
 
-  /* form */
   const { handleSubmit } = useForm({ mode: "onChange" })
 
-  /* tx */
   const createTx = useCallback(() => {
-    if (!address) return
+    if (!address || !chainID) return
     const msgs = [new MsgDonateAllVestingTokens(address)]
     return { msgs, chainID }
   }, [address, chainID])
 
-  /* fee */
   const estimationTxValues = useMemo(() => ({}), [])
+
+  if (!chainID) return null
 
   const tx = {
     estimationTxValues,
