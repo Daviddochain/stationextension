@@ -98,9 +98,19 @@ function Tx<TxValues>(props: Props<TxValues>) {
 
   const bankBalance = useBankBalance()
   const [isMax, setIsMax] = useState(false)
-  const [gasDenom, setGasDenom] = useState<string>(
-    getInitialGasDenom(bankBalance)
+
+  const chainBalances = useMemo(
+    () => (bankBalance ?? []).filter((b) => b.chain === chain),
+    [bankBalance, chain]
   )
+
+  const [gasDenom, setGasDenom] = useState<string>(
+    getInitialGasDenom(chainBalances)
+  )
+
+  useEffect(() => {
+    setGasDenom(getInitialGasDenom(chainBalances))
+  }, [chainBalances])
 
   const { t } = useTranslation()
   const lcd = useInterchainLCDClient()
@@ -422,9 +432,32 @@ function Tx<TxValues>(props: Props<TxValues>) {
 
   const walletError = !availableGasDenoms.length
     ? t("Insufficient balance to pay transaction fee")
-    : isWalletEmpty
-    ? t("Coins required to post transactions")
+    : !chainBalances.length
+    ? t("No balance found on selected chain")
     : ""
+
+  console.warn(
+    "Tx debug =",
+    JSON.stringify(
+      {
+        chain,
+        token,
+        balance,
+        gasDenom,
+        gasAmount,
+        estimatedGas,
+        availableGasDenoms,
+        walletError,
+        disabled,
+        isWalletEmpty,
+        simulationTxDefined: Boolean(simulationTx),
+        simulationMsgsLength: simulationTx?.msgs?.length ?? 0,
+        chainBalances,
+      },
+      null,
+      2
+    )
+  )
 
   const submitButton = (
     <>

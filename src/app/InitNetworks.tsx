@@ -129,9 +129,9 @@ const filterDuplicatePrefixes = (groups?: NetworkGroups): NetworkGroups => {
 
           if (seenPrefixes[prefix]) {
             console.warn(
-              `InitNetworks: skipping ${chainID} because prefix "${prefix}" is already used by ${seenPrefixes[prefix]}`
+              `InitNetworks: allowing ${chainID} with duplicate prefix "${prefix}" also used by ${seenPrefixes[prefix]}`
             )
-            return false
+            return true
           }
 
           seenPrefixes[prefix] = chainID

@@ -33,7 +33,9 @@ const InstantiateContractForm = () => {
   const chainID = useChainID()
   const { findDecimals } = useIBCHelper()
 
-  const defaultItem = { denom: chainID ? network[chainID].baseAsset : "" }
+  const defaultItem = {
+    denom: chainID ? network?.[chainID]?.baseAsset ?? "" : "",
+  }
 
   const form = useForm<TxValues>({
     mode: "onChange",
@@ -48,7 +50,7 @@ const InstantiateContractForm = () => {
 
   const createTx = useCallback(
     ({ id, msg, label, ...values }: TxValues) => {
-      if (!address || !chainID || !(id && msg)) return
+      if (!address || !chainID || !network?.[chainID] || !(id && msg)) return
       if (!validateMsg(msg)) return
 
       const admin = values.admin || undefined
@@ -68,12 +70,12 @@ const InstantiateContractForm = () => {
 
       return { msgs, chainID }
     },
-    [address, chainID, findDecimals]
+    [address, chainID, network, findDecimals]
   )
 
   const estimationTxValues = useMemo(() => values, [values])
 
-  if (!chainID) return null
+  if (!chainID || !network?.[chainID]) return null
 
   const tx = {
     estimationTxValues,

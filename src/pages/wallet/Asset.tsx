@@ -33,8 +33,22 @@ const Asset = (props: Props) => {
   const { data: prices, ...pricesState } = useExchangeRates()
   const { route, setRoute } = useWalletRoute()
 
-  const coinPrice = props.price ?? prices?.[token]?.price ?? 0
-  const change = props.change ?? prices?.[token]?.change ?? 0
+  const primaryChain = chains[0]
+  const priceKey =
+    token === "uluna"
+      ? primaryChain === "columbus-5"
+        ? "uluna:classic"
+        : primaryChain === "phoenix-1" || primaryChain === "pisco-1"
+        ? "uluna:phoenix"
+        : token
+      : primaryChain
+      ? `${primaryChain}:${token}`
+      : token
+
+  const coinPrice =
+    props.price ?? prices?.[priceKey]?.price ?? prices?.[token]?.price ?? 0
+  const change =
+    props.change ?? prices?.[priceKey]?.change ?? prices?.[token]?.change ?? 0
 
   const rawBalance = Number(balance ?? "0")
   const safeDecimals = typeof decimals === "number" ? decimals : 6
@@ -61,6 +75,21 @@ const Asset = (props: Props) => {
       : humanBalance < 1
       ? 4
       : 2
+
+  console.warn("Asset row props", {
+    id,
+    token,
+    symbol,
+    denom: props.denom,
+    balance,
+    decimals,
+    safeDecimals,
+    humanBalance,
+    coinPrice,
+    walletPrice,
+    chains: props.chains,
+    priceKey,
+  })
 
   return (
     <article
@@ -126,7 +155,7 @@ const Asset = (props: Props) => {
                     ) : (
                       <Read
                         {...props}
-                        amount={balance}
+                        amount={balance ?? "0"}
                         token=""
                         fixed={amountFixed}
                         decimals={safeDecimals}

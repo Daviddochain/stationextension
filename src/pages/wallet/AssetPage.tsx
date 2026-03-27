@@ -89,8 +89,23 @@ const AssetPage = () => {
     ...filteredUnsupportedBalances,
   ].reduce((acc, b) => acc + parseInt(b.amount, 10), 0)
 
-  const isUnsupportedSend =
-    token === "uluna" && chain === "columbus-5" && symbol === "LUNC"
+  console.warn(
+    "AssetPage debug =",
+    JSON.stringify(
+      {
+        routeDenom,
+        chain,
+        denom,
+        token,
+        symbol,
+        filteredBalances,
+        filteredUnsupportedBalances,
+        totalBalance,
+      },
+      null,
+      2
+    )
+  )
 
   return (
     <>
@@ -185,7 +200,7 @@ const AssetPage = () => {
               previousPage: route,
             })
           }
-          disabled={filteredBalances.length === 0 || isUnsupportedSend}
+          disabled={filteredBalances.length === 0}
         >
           {t("Send")}
         </Button>

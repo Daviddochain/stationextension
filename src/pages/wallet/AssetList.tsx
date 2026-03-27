@@ -30,6 +30,11 @@ const AssetList = () => {
   const native = useCustomTokensNative()
   const cw20 = useCustomTokensCW20()
 
+  console.warn(
+    "AssetList coins from useBankBalance =",
+    JSON.stringify(coins, null, 2)
+  )
+
   const alwaysVisibleDenoms = useMemo(
     () =>
       new Set([
@@ -81,27 +86,44 @@ const AssetList = () => {
 
             const data = readNativeDenom(resolvedDenom, resolvedChainID)
 
+            console.warn(
+              "AssetList reduce item =",
+              JSON.stringify(
+                {
+                  originalDenom: denom,
+                  resolvedDenom,
+                  resolvedChainID,
+                  amount,
+                  chain,
+                  data,
+                },
+                null,
+                2
+              )
+            )
+
             const assetChainID =
               resolvedChainID ||
               // @ts-expect-error
               data?.chainID ||
               chain
 
-            const key = [assetChainID, data.token].join("*")
+            const tokenKey = data.token ?? resolvedDenom
+            const key = [assetChainID, resolvedDenom].join("*")
 
             const priceKey =
-              data.token === "uluna"
+              tokenKey === "uluna"
                 ? assetChainID === "columbus-5"
                   ? "uluna:classic"
                   : assetChainID === "phoenix-1" || assetChainID === "pisco-1"
                   ? "uluna:phoenix"
-                  : data.token
-                : `${assetChainID}:${data.token}`
+                  : tokenKey
+                : `${assetChainID}:${tokenKey}`
 
             const price =
-              prices?.[priceKey]?.price ?? prices?.[data.token]?.price ?? 0
+              prices?.[priceKey]?.price ?? prices?.[tokenKey]?.price ?? 0
             const change =
-              prices?.[priceKey]?.change ?? prices?.[data.token]?.change ?? 0
+              prices?.[priceKey]?.change ?? prices?.[tokenKey]?.change ?? 0
 
             if (acc[key]) {
               acc[key].balance = `${
@@ -116,9 +138,9 @@ const AssetList = () => {
             return {
               ...acc,
               [key]: {
-                denom: data.token,
+                denom: resolvedDenom,
                 chainID: assetChainID,
-                balance: amount,
+                balance: amount ?? "0",
                 icon: data.icon,
                 symbol: data.symbol,
                 price,
@@ -142,13 +164,13 @@ const AssetList = () => {
             return true
           }
 
-          return a.price * toInput(a.balance) >= 1
+          return a.price * Number(toInput(a.balance ?? "0")) >= 1
         })
-        .sort(
-          (a, b) =>
-            b.price * Number(b.balance ?? "0") -
-            a.price * Number(a.balance ?? "0")
-        ),
+        .sort((a, b) => {
+          const aValue = a.price * Number(toInput(a.balance ?? "0"))
+          const bValue = b.price * Number(toInput(b.balance ?? "0"))
+          return bValue - aValue
+        }),
     [
       coins,
       readNativeDenom,
@@ -163,6 +185,11 @@ const AssetList = () => {
 
   const render = () => {
     if (!coins) return null
+
+    console.warn(
+      "AssetList final rendered list =",
+      JSON.stringify(list, null, 2)
+    )
 
     return (
       <div>

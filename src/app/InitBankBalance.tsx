@@ -7,14 +7,10 @@ import {
 import { BankBalanceProvider } from "data/queries/bank"
 import { combineState } from "data/query"
 import { WithFetching } from "components/feedback"
-import { useCustomTokensNative } from "data/settings/CustomTokens"
-import { useWhitelist } from "data/queries/chains"
 
 const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
   const balances = useInitialBankBalance()
   const tokenBalancesQuery = useInitialTokenBalance()
-  const native = useCustomTokensNative()
-  const { whitelist } = useWhitelist()
 
   const state = combineState(...balances, ...tokenBalancesQuery)
 
@@ -28,29 +24,36 @@ const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
     [] as CoinBalance[]
   )
 
-  native.list.forEach(({ id }) => {
-    const [chain, ...denomData] = id.split(":")
-    const denom = denomData.join(":")
+  console.warn(
+    "InitBankBalance bankBalance =",
+    JSON.stringify(bankBalance, null, 2)
+  )
+  console.warn(
+    "InitBankBalance tokenBalance =",
+    JSON.stringify(tokenBalance, null, 2)
+  )
 
-    if (
-      !bankBalance.find(
-        (balance) => balance.denom === denom && balance.chain === chain
-      )
-    ) {
-      const token = whitelist[id] // 🔥 FIXED (no networkName)
+  const mergedMap: Record<string, CoinBalance> = {}
 
-      if (!token || !token.chains || token.chains.length === 0) return
+  ;[...bankBalance, ...tokenBalance].forEach((b) => {
+    const key = `${b.chain}:${b.denom}`
 
-      bankBalance.push({
-        denom,
-        amount: "0",
-        chain,
-      })
+    if (!mergedMap[key]) {
+      mergedMap[key] = b
+    } else if (Number(b.amount) > Number(mergedMap[key].amount)) {
+      mergedMap[key] = b
     }
   })
 
+  const finalBalances = Object.values(mergedMap)
+
+  console.warn(
+    "InitBankBalance finalBalances =",
+    JSON.stringify(finalBalances, null, 2)
+  )
+
   return (
-    <BankBalanceProvider value={[...bankBalance, ...tokenBalance]}>
+    <BankBalanceProvider value={finalBalances}>
       <WithFetching {...state}>
         {(progress) => (
           <>

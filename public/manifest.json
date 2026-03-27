@@ -31,5 +31,12 @@
     "128": "icon-128.png",
     "180": "icon-180.png"
   },
-  "permissions": ["storage", "alarms"]
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "https://terra-classic-lcd.publicnode.com/*",
+    "https://terra-classic-rpc.publicnode.com/*",
+    "https://api.dungeongames.io/*",
+    "https://rpc.dungeongames.io/*"
+  ]
 }

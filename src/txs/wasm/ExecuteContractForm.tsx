@@ -36,11 +36,9 @@ const ExecuteContractForm = () => {
   const address = addresses?.[chainID]
   const bankBalance = useBankBalance()
 
-  /* tx context */
-  const defaultItem = { denom: network[chainID].baseAsset }
+  const defaultItem = { denom: network?.[chainID]?.baseAsset ?? "" }
   const { findDecimals } = useIBCHelper()
 
-  /* form */
   const form = useForm<TxValues>({
     mode: "onChange",
     defaultValues: { coins: [defaultItem] },
@@ -52,10 +50,9 @@ const ExecuteContractForm = () => {
   const { coins } = values
   const { fields, append, remove } = useFieldArray({ control, name: "coins" })
 
-  /* tx */
   const createTx = useCallback(
     ({ msg, ...values }: TxValues) => {
-      if (!address || !validateMsg(msg)) return
+      if (!chainID || !address || !validateMsg(msg)) return
 
       const execute_msg = parseJSON(msg)
       const coins = getCoins(values.coins, findDecimals)
@@ -68,8 +65,10 @@ const ExecuteContractForm = () => {
     [address, contract, chainID, findDecimals]
   )
 
-  /* fee */
   const estimationTxValues = useMemo(() => values, [values])
+
+  if (!chainID || !network?.[chainID]) return null
+
   const tx = {
     estimationTxValues,
     coins,
@@ -86,11 +85,7 @@ const ExecuteContractForm = () => {
     <Tx {...tx}>
       {({ fee, submit }) => (
         <Form onSubmit={handleSubmit(submit.fn)}>
-          <FormItem
-            /* do not translate */
-            label="Msg"
-            error={errors.msg?.message}
-          >
+          <FormItem label="Msg" error={errors.msg?.message}>
             <EditorInput
               {...register("msg", { validate: validate.msg() })}
               placeholder="{}"

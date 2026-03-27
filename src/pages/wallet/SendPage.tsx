@@ -89,21 +89,23 @@ const SendPage = () => {
             acc[data.token].balance = `${
               parseInt(acc[data.token].balance) + parseInt(amount)
             }`
-            acc[data.token].chains.push(chain)
+            acc[data.token].chains = Array.from(
+              new Set([...(acc[data.token].chains ?? []), chain])
+            )
             return acc as Record<string, AssetType>
-          } else {
-            return {
-              ...acc,
-              [data.token]: {
-                denom: data.token,
-                balance: amount,
-                icon: data.icon,
-                symbol: data.symbol,
-                price: prices?.[data.token]?.price ?? 0,
-                chains: [chain],
-              },
-            } as Record<string, AssetType>
           }
+
+          return {
+            ...acc,
+            [data.token]: {
+              denom: data.token,
+              balance: amount,
+              icon: data.icon,
+              symbol: data.symbol,
+              price: prices?.[data.token]?.price ?? 0,
+              chains: [chain],
+            },
+          } as Record<string, AssetType>
         }, {} as Record<string, AssetType>) ?? {}
       ).sort(
         (a, b) => b.price * parseInt(b.balance) - a.price * parseInt(a.balance)
@@ -148,10 +150,13 @@ const SendPage = () => {
     })
   }, [asset, availableAssets, defaultAsset, networks])
 
+  const selectedAsset = watch("asset")
+  const selectedChain = watch("chain")
+
   const token = balances.find(
     ({ denom, chain }) =>
-      chain === watch("chain") &&
-      readNativeDenom(denom).token === watch("asset")
+      chain === selectedChain &&
+      readNativeDenom(denom, chain).token === selectedAsset
   )
 
   useEffect(() => {
@@ -207,17 +212,16 @@ const SendPage = () => {
           </Flex>
         </span>
       )
-    } else {
-      return (
-        <span className={styles.destination__error}>
-          <Flex gap={4} start>
-            <ClearIcon fontSize="inherit" className={styles.icon} />
-            Destination chain:{" "}
-            <strong>{networks[destinationChain]?.name}</strong>
-          </Flex>
-        </span>
-      )
     }
+
+    return (
+      <span className={styles.destination__error}>
+        <Flex gap={4} start>
+          <ClearIcon fontSize="inherit" className={styles.icon} />
+          Destination chain: <strong>{networks[destinationChain]?.name}</strong>
+        </Flex>
+      </span>
+    )
   }
 
   const createTx = useCallback(
@@ -232,70 +236,70 @@ const SendPage = () => {
       if (!chain || !destinationChain || !token) return
 
       if (destinationChain === chain) {
-        const msgs = AccAddress.validate(token?.denom)
+        const msgs = AccAddress.validate(token.denom)
           ? [
               new MsgExecuteContract(
-                addresses[token?.chain ?? ""],
-                token?.denom ?? "",
+                addresses[token.chain ?? ""],
+                token.denom ?? "",
                 execute_msg
               ),
             ]
           : [
               new MsgSend(
-                addresses[token?.chain ?? ""],
+                addresses[token.chain ?? ""],
                 address,
-                amount + token?.denom
-              ),
-            ]
-
-        return { msgs, memo, chainID: chain }
-      } else {
-        const channel = getIBCChannel({
-          from: chain,
-          to: destinationChain,
-          tokenAddress: token.denom,
-          icsChannel: networkIbcDenoms[`${chain}:${token.denom}`]?.icsChannel,
-        })
-
-        if (!channel) throw new Error("No IBC channel found")
-
-        const msgs = AccAddress.validate(token?.denom ?? "")
-          ? [
-              new MsgExecuteContract(
-                addresses[token?.chain ?? ""],
-                token?.denom ?? "",
-                {
-                  send: {
-                    contract: getICSContract({
-                      from: chain,
-                      to: destinationChain,
-                    }),
-                    amount: amount,
-                    msg: Buffer.from(
-                      JSON.stringify({
-                        channel,
-                        remote_address: address,
-                      })
-                    ).toString("base64"),
-                  },
-                }
-              ),
-            ]
-          : [
-              new MsgTransfer(
-                "transfer",
-                channel,
-                new Coin(token?.denom ?? "", amount),
-                addresses[token?.chain ?? ""],
-                address,
-                undefined,
-                (Date.now() + 120 * 1000) * 1e6,
-                undefined
+                amount + token.denom
               ),
             ]
 
         return { msgs, memo, chainID: chain }
       }
+
+      const channel = getIBCChannel({
+        from: chain,
+        to: destinationChain,
+        tokenAddress: token.denom,
+        icsChannel: networkIbcDenoms[`${chain}:${token.denom}`]?.icsChannel,
+      })
+
+      if (!channel) throw new Error("No IBC channel found")
+
+      const msgs = AccAddress.validate(token.denom ?? "")
+        ? [
+            new MsgExecuteContract(
+              addresses[token.chain ?? ""],
+              token.denom ?? "",
+              {
+                send: {
+                  contract: getICSContract({
+                    from: chain,
+                    to: destinationChain,
+                  }),
+                  amount,
+                  msg: Buffer.from(
+                    JSON.stringify({
+                      channel,
+                      remote_address: address,
+                    })
+                  ).toString("base64"),
+                },
+              }
+            ),
+          ]
+        : [
+            new MsgTransfer(
+              "transfer",
+              channel,
+              new Coin(token.denom ?? "", amount),
+              addresses[token.chain ?? ""],
+              address,
+              undefined,
+              (Date.now() + 120 * 1000) * 1e6,
+              undefined
+            ),
+          ]
+
+      return { msgs, memo, chainID: chain }
     },
     [
       addresses,
