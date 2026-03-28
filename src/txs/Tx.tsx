@@ -1,4 +1,4 @@
-import {
+import React, {
   Fragment,
   ReactNode,
   useCallback,
@@ -64,17 +64,14 @@ interface Props<TxValues> {
   coins?: CoinInput[]
   balance?: Amount
   gasAdjustment?: number
-
   estimationTxValues?: TxValues
   createTx: (values: TxValues) => CreateTxOptions | undefined
   taxRequired?: boolean
   excludeGasDenom?: (denom: string) => boolean
   chain: string
-
   disabled?: string | false
   children: (props: RenderProps<TxValues>) => ReactNode
   onChangeMax?: (input: number) => void
-
   onPost?: () => void
   hideLoader?: boolean
   onSuccess?: () => void
@@ -83,6 +80,7 @@ interface Props<TxValues> {
 }
 
 type RenderMax = (onClick?: (max: Amount) => void) => ReactNode
+
 interface RenderProps<TxValues> {
   max: { amount: Amount; render: RenderMax; reset: () => void }
   fee: { render: (descriptions?: Contents) => ReactNode }
@@ -96,11 +94,11 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const { children, onChangeMax } = props
   const { onPost, redirectAfterTx, queryKeys, onSuccess } = props
 
-  const bankBalance = useBankBalance()
+  const bankBalance = useBankBalance() ?? []
   const [isMax, setIsMax] = useState(false)
 
   const chainBalances = useMemo(
-    () => (bankBalance ?? []).filter((b) => b.chain === chain),
+    () => bankBalance.filter((b) => b.chain === chain),
     [bankBalance, chain]
   )
 
@@ -115,8 +113,8 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const { t } = useTranslation()
   const lcd = useInterchainLCDClient()
   const networks = useNetwork()
-  const { wallet, validatePassword, ...auth } = useAuth()
-  const addresses = useInterchainAddresses()
+  const { wallet, ...auth } = useAuth()
+  const addresses = useInterchainAddresses() ?? {}
   const isWalletEmpty = useIsWalletEmpty()
   const setLatestTx = useSetRecoilState(latestTxState)
   const isBroadcasting = useRecoilValue(isBroadcastingState)
@@ -139,16 +137,19 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const simulationTx = estimationTxValues
     ? createTx(estimationTxValues)
     : undefined
+
   const gasAdjustmentSetting = SettingKey.GasAdjustment
   const gasAdjustment =
     (networks?.[chain]?.gasAdjustment ?? 1) *
     (getLocalSetting<number>(gasAdjustmentSetting) ?? 1)
 
   const key = {
-    address: addresses?.[chain],
+    address: addresses[chain],
     gasAdjustment: gasAdjustment * (txGasAdjustment ?? 1),
     estimationTxValues,
     msgs: simulationTx?.msgs.map((msg) => msg.toData(!!isClassic)["@type"]),
+    chain,
+    gasDenom,
   }
 
   const { data: estimatedGas, ...estimatedGasState } = useQuery(
@@ -172,10 +173,10 @@ function Tx<TxValues>(props: Props<TxValues>) {
           feeDenoms: [gasDenom],
         })
 
-        return unsignedTx.auth_info.fee.gas_limit * key.gasAdjustment
+        return Math.ceil(unsignedTx.auth_info.fee.gas_limit * key.gasAdjustment)
       } catch (error) {
         console.error(error)
-        return 200_000
+        return 200000
       }
     },
     {
@@ -187,12 +188,36 @@ function Tx<TxValues>(props: Props<TxValues>) {
     }
   )
 
+  const availableGasDenoms = useMemo(() => {
+    const configured = Object.keys(networks?.[chain]?.gasPrices ?? {})
+    const filtered = props.excludeGasDenom
+      ? configured.filter((denom) => !props.excludeGasDenom?.(denom))
+      : configured
+
+    const presentOnChain = filtered.filter((denom) =>
+      chainBalances.some(
+        (balance) => balance.denom === denom && has(balance.amount)
+      )
+    )
+
+    return presentOnChain.length ? presentOnChain : filtered
+  }, [chain, networks, props.excludeGasDenom, chainBalances])
+
+  useEffect(() => {
+    if (!availableGasDenoms.length) return
+    if (!availableGasDenoms.includes(gasDenom)) {
+      setGasDenom(availableGasDenoms[0])
+    }
+  }, [availableGasDenoms, gasDenom])
+
   const getGasAmount = useCallback(
     (denom: CoinDenom) => {
       const gasPrice = chain?.startsWith("carbon-")
         ? carbonFees?.prices[denom]
         : networks?.[chain]?.gasPrices?.[denom]
+
       if (isNil(estimatedGas) || !gasPrice) return "0"
+
       return new BigNumber(estimatedGas)
         .times(gasPrice)
         .integerValue(BigNumber.ROUND_CEIL)
@@ -207,7 +232,10 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const getNativeMax = () => {
     if (!balance) return
     return gasFee.denom === token
-      ? (Number(balance) - Number(gasFee.amount)).toFixed(0)
+      ? new BigNumber(balance)
+          .minus(gasFee.amount)
+          .integerValue(BigNumber.ROUND_FLOOR)
+          .toString()
       : balance
   }
 
@@ -227,20 +255,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
       : undefined
 
   const failed = getErrorMessage(taxState.error ?? estimatedGasState.error)
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development" && failed) {
-      console.groupCollapsed("Fee estimation failed")
-      console.info(
-        simulationTx?.msgs.map((msg) =>
-          msg.toData(!!networks?.[chain]?.isClassic)
-        )
-      )
-      console.info(failed)
-      console.groupEnd()
-    }
-  }, [failed, simulationTx, networks, chain])
 
-  const passwordRequired = isWallet.single(wallet)
   const [password, setPassword] = useState("")
   const [incorrect, setIncorrect] = useState<string>()
 
@@ -303,9 +318,9 @@ function Tx<TxValues>(props: Props<TxValues>) {
       }
 
       onPost?.()
-    } catch (error) {
-      if (error instanceof PasswordError) setIncorrect(error.message)
-      else setError(error as Error)
+    } catch (err) {
+      if (err instanceof PasswordError) setIncorrect(err.message)
+      else setError(err as Error)
     }
 
     setSubmitting(false)
@@ -325,10 +340,6 @@ function Tx<TxValues>(props: Props<TxValues>) {
   const insufficient = balanceAfterTx
     ? new BigNumber(balanceAfterTx).lt(0)
     : false
-
-  const availableGasDenoms = useMemo(() => {
-    return Object.keys(networks?.[chain]?.gasPrices ?? {})
-  }, [chain, networks])
 
   const resetMax = () => setIsMax(false)
   const renderMax: RenderMax = (onClick) => {
@@ -352,8 +363,6 @@ function Tx<TxValues>(props: Props<TxValues>) {
   }
 
   const renderFee = (descriptions?: Contents) => {
-    if (!estimatedGas) return null
-
     return (
       <Details>
         <dl>
@@ -390,7 +399,9 @@ function Tx<TxValues>(props: Props<TxValues>) {
             )}
           </dt>
           <dd>
-            {gasFee.amount && (
+            {estimatedGasState.isLoading ? (
+              t("Estimating fee...")
+            ) : gasFee.amount && has(gasFee.amount) ? (
               <Read
                 decimals={decimals}
                 {...gasFee}
@@ -400,6 +411,8 @@ function Tx<TxValues>(props: Props<TxValues>) {
                     : gasFee.denom
                 }
               />
+            ) : (
+              t("Unavailable")
             )}
           </dd>
 
@@ -430,40 +443,19 @@ function Tx<TxValues>(props: Props<TxValues>) {
     )
   }
 
-  const walletError = !availableGasDenoms.length
+  const walletError = !Object.keys(addresses).length
+    ? t("Connect wallet")
+    : !availableGasDenoms.length
     ? t("Insufficient balance to pay transaction fee")
     : !chainBalances.length
     ? t("No balance found on selected chain")
     : ""
 
-  console.warn(
-    "Tx debug =",
-    JSON.stringify(
-      {
-        chain,
-        token,
-        balance,
-        gasDenom,
-        gasAmount,
-        estimatedGas,
-        availableGasDenoms,
-        walletError,
-        disabled,
-        isWalletEmpty,
-        simulationTxDefined: Boolean(simulationTx),
-        simulationMsgsLength: simulationTx?.msgs?.length ?? 0,
-        chainBalances,
-      },
-      null,
-      2
-    )
-  )
-
   const submitButton = (
     <>
       {walletError && <FormError>{walletError}</FormError>}
 
-      {!addresses ? (
+      {!Object.keys(addresses).length ? (
         <ConnectWallet
           renderButton={(open) => (
             <Submit type="button" onClick={open}>
@@ -476,7 +468,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
           {failed ? (
             <FormError>{failed}</FormError>
           ) : (
-            passwordRequired && (
+            isWallet.single(wallet) && (
               <FormItem label={t("Password")} error={incorrect}>
                 <Input
                   type="password"
@@ -494,7 +486,7 @@ function Tx<TxValues>(props: Props<TxValues>) {
             disabled={!estimatedGas || !!disabled || !!walletError}
             submitting={submitting}
           >
-            {submitting ? submittingLabel : disabled}
+            {submitting ? submittingLabel : disabled || t("Submit")}
           </Submit>
         </Grid>
       )}

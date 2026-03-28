@@ -53,7 +53,7 @@ interface AssetType {
 }
 
 const SendPage = () => {
-  const addresses = useInterchainAddresses()
+  const addresses = useInterchainAddresses() ?? {}
   const networks = useNetwork()
   const { getIBCChannel, getICSContract } = useIBCChannels()
   const { ibcDenoms } = useWhitelist()
@@ -74,7 +74,7 @@ const SendPage = () => {
   )
 
   const { t } = useTranslation()
-  const balances = useBankBalance()
+  const balances = useBankBalance() ?? []
   const { data: prices } = useExchangeRates()
   const readNativeDenom = useNativeDenoms()
   const { route, setRoute } = useWalletRoute()
@@ -82,7 +82,7 @@ const SendPage = () => {
   const availableAssets = useMemo(
     () =>
       Object.values(
-        (balances ?? []).reduce((acc, { denom, amount, chain }) => {
+        balances.reduce((acc, { denom, amount, chain }) => {
           const data = readNativeDenom(denom, chain)
 
           if (acc[data.token]) {
@@ -106,7 +106,7 @@ const SendPage = () => {
               chains: [chain],
             },
           } as Record<string, AssetType>
-        }, {} as Record<string, AssetType>) ?? {}
+        }, {} as Record<string, AssetType>)
       ).sort(
         (a, b) => b.price * parseInt(b.balance) - a.price * parseInt(a.balance)
       ),
@@ -141,12 +141,12 @@ const SendPage = () => {
       ({ denom }) => denom === (asset ?? defaultAsset)
     )?.chains
 
-    const uniqueChains = Array.from(new Set(chainsFromAsset))
+    const uniqueChains = Array.from(new Set(chainsFromAsset ?? []))
 
     return uniqueChains.sort((a, b) => {
-      if (networks[a]?.prefix === "terra") return -1
-      if (networks[b]?.prefix === "terra") return 1
-      return 0
+      const nameA = networks[a]?.name ?? a
+      const nameB = networks[b]?.name ?? b
+      return nameA.localeCompare(nameB)
     })
   }, [asset, availableAssets, defaultAsset, networks])
 
@@ -177,18 +177,21 @@ const SendPage = () => {
   }, [form, recipient, setValue])
 
   useEffect(() => {
-    if (availableChains?.length) {
+    if (!availableChains.length) return
+
+    if (!chain || !availableChains.includes(chain)) {
       setValue("chain", availableChains[0])
     }
-  }, [availableChains, setValue])
+  }, [availableChains, chain, setValue])
 
   function renderDestinationChain() {
     if (
       !chain ||
       !destinationAddress ||
       !AccAddress.validate(destinationAddress)
-    )
+    ) {
       return null
+    }
 
     const destinationChain = getChainIDFromAddress(destinationAddress, networks)
 
@@ -226,7 +229,6 @@ const SendPage = () => {
 
   const createTx = useCallback(
     ({ address, input, memo }: TxValues) => {
-      if (!addresses) return
       if (!(address && AccAddress.validate(address))) return
 
       const amount = toAmount(input, { decimals })
@@ -235,22 +237,19 @@ const SendPage = () => {
 
       if (!chain || !destinationChain || !token) return
 
+      const fromAddress = addresses[token.chain ?? ""]
+      if (!fromAddress) return
+
       if (destinationChain === chain) {
         const msgs = AccAddress.validate(token.denom)
           ? [
               new MsgExecuteContract(
-                addresses[token.chain ?? ""],
+                fromAddress,
                 token.denom ?? "",
                 execute_msg
               ),
             ]
-          : [
-              new MsgSend(
-                addresses[token.chain ?? ""],
-                address,
-                amount + token.denom
-              ),
-            ]
+          : [new MsgSend(fromAddress, address, amount + token.denom)]
 
         return { msgs, memo, chainID: chain }
       }
@@ -266,32 +265,28 @@ const SendPage = () => {
 
       const msgs = AccAddress.validate(token.denom ?? "")
         ? [
-            new MsgExecuteContract(
-              addresses[token.chain ?? ""],
-              token.denom ?? "",
-              {
-                send: {
-                  contract: getICSContract({
-                    from: chain,
-                    to: destinationChain,
-                  }),
-                  amount,
-                  msg: Buffer.from(
-                    JSON.stringify({
-                      channel,
-                      remote_address: address,
-                    })
-                  ).toString("base64"),
-                },
-              }
-            ),
+            new MsgExecuteContract(fromAddress, token.denom ?? "", {
+              send: {
+                contract: getICSContract({
+                  from: chain,
+                  to: destinationChain,
+                }),
+                amount,
+                msg: Buffer.from(
+                  JSON.stringify({
+                    channel,
+                    remote_address: address,
+                  })
+                ).toString("base64"),
+              },
+            }),
           ]
         : [
             new MsgTransfer(
               "transfer",
               channel,
               new Coin(token.denom ?? "", amount),
-              addresses[token.chain ?? ""],
+              fromAddress,
               address,
               undefined,
               (Date.now() + 120 * 1000) * 1e6,
@@ -324,11 +319,15 @@ const SendPage = () => {
   const coins = [{ input, denom: "" }] as CoinInput[]
 
   const estimationTxValues = useMemo(() => {
+    const estimationChain =
+      chain && addresses[chain] ? chain : availableChains[0] ?? chain
+
     return {
-      address: addresses?.[chain ?? "phoenix-1"],
+      address: estimationChain ? addresses[estimationChain] : undefined,
       input: toInput(1, decimals),
+      memo: "",
     }
-  }, [addresses, decimals, chain])
+  }, [addresses, decimals, chain, availableChains])
 
   const tx = {
     token: token?.denom ?? "",
@@ -371,6 +370,7 @@ const SendPage = () => {
             submit.fn({
               address: values.address,
               input: values.input ?? 0,
+              memo: values.memo ?? "",
             })
           )}
           className={styles.form}
@@ -393,7 +393,7 @@ const SendPage = () => {
                 />
               </FormItem>
 
-              {availableChains && (
+              {availableChains.length > 0 && (
                 <FormItem label={t("Source chain")}>
                   <ChainSelector
                     value={chain ?? ""}

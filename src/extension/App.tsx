@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { useRoutes } from "react-router-dom"
 import { useAddress, useChainID, useNetworkName } from "data/wallet"
 import { ErrorBoundary } from "components/feedback"
@@ -33,6 +33,7 @@ import { useNetworks } from "app/InitNetworks"
 import { useTheme } from "data/settings/Theme"
 import { useReplaceKeplr } from "utils/localStorage"
 import EnableCoinType from "app/sections/EnableCoinType"
+import { InterchainNetwork } from "types/network"
 
 const App = () => {
   const { networks } = useNetworks()
@@ -45,10 +46,28 @@ const App = () => {
   const { wallet } = useAuth()
   const { replaceKeplr } = useReplaceKeplr()
 
+  const normalizedNetworks = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(networks ?? {}).map(([id, network]) => [
+        id,
+        {
+          ...network,
+          name: network?.name ?? id,
+          chainID: network?.chainID ?? id,
+          lcd: network?.lcd ?? "",
+        },
+      ])
+    ) as Record<string, InterchainNetwork>
+  }, [networks])
+
   useEffect(() => {
     if (!chainID) return
-    storeNetwork({ ...networks[name][chainID], name }, networks[name])
-  }, [networks, chainID, name])
+
+    const network = normalizedNetworks[chainID]
+    if (!network) return
+
+    storeNetwork(network, normalizedNetworks)
+  }, [normalizedNetworks, chainID])
 
   useEffect(() => {
     if (address)

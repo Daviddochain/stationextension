@@ -32,12 +32,14 @@ export const useNetwork = (): Record<ChainID, InterchainNetwork> => {
   const { customLCDs } = useCustomLCDs()
 
   return useMemo(() => {
+    const safeCustomLCDs = customLCDs ?? {}
+
     return Object.fromEntries(
       Object.entries(networks ?? {}).map(([chainID, chain]) => [
         chainID,
         {
           ...chain,
-          lcd: customLCDs[chainID] ?? chain.lcd,
+          lcd: safeCustomLCDs[chainID] ?? chain.lcd,
         },
       ])
     ) as Record<ChainID, InterchainNetwork>

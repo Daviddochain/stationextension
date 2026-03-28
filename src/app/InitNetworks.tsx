@@ -153,7 +153,20 @@ const InitNetworks = ({ children }: PropsWithChildren<{}>) => {
     return applyCustomLCDs(filterDuplicatePrefixes(merged), safeCustomLCDs)
   }, [defaultNetworks, customChains, safeCustomLCDs])
 
-  if (!defaultNetworks) return null
+  if (!defaultNetworks) {
+    return (
+      <NetworksProvider
+        value={{
+          networks: {},
+          networksLoading: true,
+          filterEnabledNetworks: (networks) => networks ?? {},
+          filterDisabledNetworks: () => ({}),
+        }}
+      >
+        {children}
+      </NetworksProvider>
+    )
+  }
 
   return (
     <NetworksProvider
