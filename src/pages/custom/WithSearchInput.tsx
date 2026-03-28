@@ -23,22 +23,25 @@ const WithSearchInput = ({
   inline,
   extra,
   className,
+  disabled,
 }: Props) => {
   const [input, setInput] = useState("")
 
   return (
     <Grid gap={gap ?? 20} className={className}>
-      <SearchInput
-        value={input}
-        small={small}
-        inline={inline}
-        placeholder={placeholder}
-        onChange={(e) => setInput(e.target.value)}
-        autoFocus
-        extra={extra}
-        padding={padding}
-      />
-      {children(input)}
+      {!disabled && (
+        <SearchInput
+          value={input}
+          small={small}
+          inline={inline}
+          placeholder={placeholder}
+          onChange={(e) => setInput(e.target.value)}
+          autoFocus
+          extra={extra}
+          padding={padding}
+        />
+      )}
+      {children(disabled ? "" : input)}
     </Grid>
   )
 }

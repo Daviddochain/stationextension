@@ -15,6 +15,8 @@ const useLCDClients = () => {
     return Object.fromEntries(
       Object.entries(networks ?? {}).map(([chainID, chain]) => {
         try {
+          if (!chain?.lcd) return [chainID, undefined]
+
           return [
             chainID,
             new LCDClient({
@@ -39,7 +41,7 @@ const useLCDClients = () => {
 }
 
 export const useInitialTokenBalance = () => {
-  const addresses = useInterchainAddresses()
+  const addresses = useInterchainAddresses() ?? {}
   const networks = useNetwork()
   const lcdClients = useLCDClients()
   const { list: cw20 } = useCustomTokensCW20()
@@ -47,27 +49,13 @@ export const useInitialTokenBalance = () => {
   return useQueries(
     cw20.map(({ token }) => {
       const chainID = getChainIDFromAddress(token, networks)
-      const address = chainID ? addresses?.[chainID] : undefined
+      const address = chainID ? addresses[chainID] : undefined
       const lcd = chainID ? lcdClients[chainID] : undefined
 
       return {
         queryKey: [queryKey.bank.balances, token, chainID, address],
         queryFn: async () => {
           if (!address || !chainID || !lcd) {
-            console.warn(
-              "useInitialTokenBalance skipped =",
-              JSON.stringify(
-                {
-                  token,
-                  chainID,
-                  address,
-                  hasLCD: Boolean(lcd),
-                },
-                null,
-                2
-              )
-            )
-
             return {
               amount: "0",
               denom: token,
@@ -76,45 +64,15 @@ export const useInitialTokenBalance = () => {
           }
 
           try {
-            console.warn(
-              "Querying CW20 token balance =",
-              JSON.stringify(
-                {
-                  token,
-                  chainID,
-                  address,
-                  lcd: lcd.config?.URL,
-                },
-                null,
-                2
-              )
-            )
-
             const { balance } = await lcd.wasm.contractQuery<{
               balance: Amount
             }>(token, { balance: { address } })
 
-            const mapped = {
+            return {
               amount: balance,
               denom: token,
               chain: chainID,
             } as CoinBalance
-
-            console.warn(
-              "Mapped CW20 token balance for frontend =",
-              JSON.stringify(
-                {
-                  token,
-                  chainID,
-                  address,
-                  mapped,
-                },
-                null,
-                2
-              )
-            )
-
-            return mapped
           } catch (error) {
             console.error("useInitialTokenBalance failed", {
               token,
@@ -143,103 +101,30 @@ export const [useBankBalance, BankBalanceProvider] =
   createContext<CoinBalance[]>("useBankBalance")
 
 export const useInitialBankBalance = () => {
-  const addresses = useInterchainAddresses()
+  const addresses = useInterchainAddresses() ?? {}
   const lcdClients = useLCDClients()
 
-  console.warn(
-    "useInitialBankBalance addresses =",
-    JSON.stringify(addresses, null, 2)
-  )
-
-  console.warn(
-    "useInitialBankBalance lcdClients =",
-    JSON.stringify(
-      Object.fromEntries(
-        Object.entries(lcdClients ?? {}).map(([k, v]) => [
-          k,
-          v ? { url: v.config?.URL } : null,
-        ])
-      ),
-      null,
-      2
-    )
-  )
-
   return useQueries(
-    Object.entries(addresses ?? {}).map(([chainID, address]) => {
+    Object.entries(addresses).map(([chainID, address]) => {
       const lcd = lcdClients[chainID]
-
-      console.warn(
-        "Preparing bank query =",
-        JSON.stringify(
-          {
-            chainID,
-            address,
-            hasLCD: Boolean(lcd),
-            lcd: lcd?.config?.URL,
-          },
-          null,
-          2
-        )
-      )
 
       return {
         queryKey: [queryKey.bank.balances, address, chainID],
         queryFn: async () => {
           if (!address || !lcd) {
-            console.warn(
-              "useInitialBankBalance skipped =",
-              JSON.stringify(
-                {
-                  chainID,
-                  address,
-                  hasLCD: Boolean(lcd),
-                },
-                null,
-                2
-              )
-            )
             return [] as CoinBalance[]
           }
 
           try {
-            console.warn(
-              "Querying bank balance =",
-              JSON.stringify(
-                {
-                  chainID,
-                  address,
-                  lcd: lcd.config?.URL,
-                },
-                null,
-                2
-              )
-            )
-
             const bal = ["phoenix-1", "pisco-1"].includes(chainID)
               ? await lcd.bank.spendableBalances(address)
               : await lcd.bank.balance(address)
 
-            const mapped = bal[0].toArray().map(({ denom, amount }) => ({
+            return bal[0].toArray().map(({ denom, amount }) => ({
               denom,
               amount: amount.toString(),
               chain: chainID,
             })) as CoinBalance[]
-
-            console.warn(
-              "Mapped bank balances for frontend =",
-              JSON.stringify(
-                {
-                  chainID,
-                  address,
-                  mapped,
-                },
-                null,
-                2
-              )
-            )
-
-            return mapped
           } catch (error) {
             console.error("useInitialBankBalance failed", {
               chainID,
@@ -265,15 +150,14 @@ export interface CoinBalance {
 }
 
 export const useBalances = () => {
-  const addresses = useInterchainAddresses()
+  const addresses = useInterchainAddresses() ?? {}
   const lcdClients = useLCDClients()
 
   return useQuery(
     [queryKey.bank.balances, addresses],
     async () => {
-      if (!addresses) return [] as CoinBalance[]
-
       const chains = Object.keys(addresses)
+      if (!chains.length) return [] as CoinBalance[]
 
       const balances = await Promise.all(
         chains.map(async (chain) => {
@@ -281,35 +165,10 @@ export const useBalances = () => {
           const lcd = lcdClients[chain]
 
           if (!address || !lcd) {
-            console.warn(
-              "useBalances skipped =",
-              JSON.stringify(
-                {
-                  chain,
-                  address,
-                  hasLCD: Boolean(lcd),
-                },
-                null,
-                2
-              )
-            )
             return null
           }
 
           try {
-            console.warn(
-              "Querying balances =",
-              JSON.stringify(
-                {
-                  chain,
-                  address,
-                  lcd: lcd.config?.URL,
-                },
-                null,
-                2
-              )
-            )
-
             return ["phoenix-1", "pisco-1"].includes(chain)
               ? await lcd.bank.spendableBalances(address)
               : await lcd.bank.balance(address)
@@ -337,32 +196,14 @@ export const useBalances = () => {
           chain,
         })) as CoinBalance[]
 
-        console.warn(
-          "Mapped balances for frontend =",
-          JSON.stringify(
-            {
-              chain,
-              address: addresses[chain],
-              mapped,
-            },
-            null,
-            2
-          )
-        )
-
         result.push(...mapped)
       })
-
-      console.warn(
-        "Final merged balances for frontend =",
-        JSON.stringify(result, null, 2)
-      )
 
       return result
     },
     {
       ...RefetchOptions.DEFAULT,
-      enabled: Boolean(addresses && Object.keys(addresses).length),
+      enabled: Boolean(Object.keys(addresses).length),
     }
   )
 }

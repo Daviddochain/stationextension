@@ -9,8 +9,13 @@ import { combineState } from "data/query"
 import { WithFetching } from "components/feedback"
 
 const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
-  const balances = useInitialBankBalance()
-  const tokenBalancesQuery = useInitialTokenBalance()
+  const balances = useInitialBankBalance() ?? []
+  const tokenBalancesQuery = useInitialTokenBalance() ?? []
+
+  // 🔴 CRITICAL FIX: avoid crashing when empty
+  if (!balances.length && !tokenBalancesQuery.length) {
+    return <BankBalanceProvider value={[]}>{children}</BankBalanceProvider>
+  }
 
   const state = combineState(...balances, ...tokenBalancesQuery)
 
@@ -22,15 +27,6 @@ const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
   const tokenBalance: CoinBalance[] = tokenBalancesQuery.reduce(
     (acc, { data }) => (data ? [...acc, data] : acc),
     [] as CoinBalance[]
-  )
-
-  console.warn(
-    "InitBankBalance bankBalance =",
-    JSON.stringify(bankBalance, null, 2)
-  )
-  console.warn(
-    "InitBankBalance tokenBalance =",
-    JSON.stringify(tokenBalance, null, 2)
   )
 
   const mergedMap: Record<string, CoinBalance> = {}
@@ -46,11 +42,6 @@ const InitBankBalance = ({ children }: PropsWithChildren<{}>) => {
   })
 
   const finalBalances = Object.values(mergedMap)
-
-  console.warn(
-    "InitBankBalance finalBalances =",
-    JSON.stringify(finalBalances, null, 2)
-  )
 
   return (
     <BankBalanceProvider value={finalBalances}>

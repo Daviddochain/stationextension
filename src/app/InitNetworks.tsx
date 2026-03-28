@@ -1,14 +1,14 @@
-import { PropsWithChildren, useEffect, useState, useMemo } from "react"
+import { PropsWithChildren, useEffect, useMemo, useState } from "react"
 import axios from "axios"
 import { STATION_ASSETS } from "config/constants"
 import createContext from "utils/createContext"
 import { useCustomChains, useCustomLCDs } from "utils/localStorage"
 
 type ChainConfig = Record<string, any>
-type NetworkGroups = Record<string, Record<string, ChainConfig>>
+type NetworkMap = Record<string, ChainConfig>
 
 export const [useNetworks, NetworksProvider] = createContext<{
-  networks: Record<string, any>
+  networks: NetworkMap
   networksLoading: boolean
   filterEnabledNetworks: <T>(network: Record<string, T>) => Record<string, T>
   filterDisabledNetworks: <T>(network: Record<string, T>) => Record<string, T>
@@ -46,124 +46,71 @@ const normalizeCustomLCDs = (
   ) as Record<string, string>
 }
 
-const normalizeChains = (groups?: Record<string, any>): NetworkGroups => {
+const normalizeChains = (chains?: Record<string, any>): NetworkMap => {
   return Object.fromEntries(
-    Object.entries(groups ?? {}).map(([groupName, chain]) => {
-      const chainID = chain?.chainID ?? groupName
-
-      return [
-        groupName,
-        {
-          [chainID]: {
-            ...(chain ?? {}),
-            icon: normalizeAssetUrl(chain?.icon),
-          },
-        },
-      ]
-    })
-  ) as NetworkGroups
+    Object.entries(chains ?? {}).map(([chainID, chain]) => [
+      chainID,
+      {
+        ...(chain ?? {}),
+        chainID: chain?.chainID ?? chainID,
+        icon: normalizeAssetUrl(chain?.icon),
+      },
+    ])
+  ) as NetworkMap
 }
 
-const normalizeCustomChains = (groups?: Record<string, any>): NetworkGroups => {
+const normalizeCustomChains = (chains?: Record<string, any>): NetworkMap => {
   return Object.fromEntries(
-    Object.entries(groups ?? {}).map(([groupName, value]) => {
-      const isAlreadyGrouped =
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        Object.values(value).every(
-          (item) =>
-            item &&
-            typeof item === "object" &&
-            !Array.isArray(item) &&
-            ("chainID" in item || "lcd" in item || "rpc" in item)
-        )
-
-      if (isAlreadyGrouped) {
-        return [
-          groupName,
-          Object.fromEntries(
-            Object.entries(value as Record<string, any>).map(
-              ([chainID, chain]) => {
-                const c = chain as Record<string, any>
-
-                return [
-                  chainID,
-                  {
-                    ...c,
-                    icon: normalizeAssetUrl(c?.icon),
-                  },
-                ]
-              }
-            )
-          ),
-        ]
-      }
-
-      const chainID = value?.chainID ?? groupName
-
-      return [
-        groupName,
-        {
-          [chainID]: {
-            ...(value ?? {}),
-            icon: normalizeAssetUrl(value?.icon),
-          },
-        },
-      ]
-    })
-  ) as NetworkGroups
+    Object.entries(chains ?? {}).map(([chainID, chain]) => [
+      chainID,
+      {
+        ...(chain ?? {}),
+        chainID: chain?.chainID ?? chainID,
+        icon: normalizeAssetUrl(chain?.icon),
+      },
+    ])
+  ) as NetworkMap
 }
 
-const filterDuplicatePrefixes = (groups?: NetworkGroups): NetworkGroups => {
+const filterDuplicatePrefixes = (chains?: NetworkMap): NetworkMap => {
   const seenPrefixes: Record<string, string> = {}
 
   return Object.fromEntries(
-    Object.entries(groups ?? {}).map(([groupName, chains]) => [
-      groupName,
-      Object.fromEntries(
-        Object.entries(chains ?? {}).filter(([chainID, chain]) => {
-          const prefix = chain?.prefix
+    Object.entries(chains ?? {}).filter(([chainID, chain]) => {
+      const prefix = chain?.prefix
 
-          if (!prefix) return true
+      if (!prefix) return true
 
-          if (seenPrefixes[prefix]) {
-            console.warn(
-              `InitNetworks: allowing ${chainID} with duplicate prefix "${prefix}" also used by ${seenPrefixes[prefix]}`
-            )
-            return true
-          }
+      if (seenPrefixes[prefix]) {
+        console.warn(
+          `InitNetworks: dropping ${chainID} with duplicate prefix "${prefix}" already used by ${seenPrefixes[prefix]}`
+        )
+        return false
+      }
 
-          seenPrefixes[prefix] = chainID
-          return true
-        })
-      ),
-    ])
-  ) as NetworkGroups
+      seenPrefixes[prefix] = chainID
+      return true
+    })
+  ) as NetworkMap
 }
 
 const applyCustomLCDs = (
-  groups: NetworkGroups,
+  chains: NetworkMap,
   customLCDs: Record<string, string>
-): NetworkGroups => {
+): NetworkMap => {
   return Object.fromEntries(
-    Object.entries(groups ?? {}).map(([groupName, chains]) => [
-      groupName,
-      Object.fromEntries(
-        Object.entries(chains ?? {}).map(([chainID, chain]) => [
-          chainID,
-          {
-            ...(chain ?? {}),
-            lcd: customLCDs[chainID] ?? chain?.lcd,
-          },
-        ])
-      ),
+    Object.entries(chains ?? {}).map(([chainID, chain]) => [
+      chainID,
+      {
+        ...(chain ?? {}),
+        lcd: customLCDs[chainID] ?? chain?.lcd,
+      },
     ])
-  ) as NetworkGroups
+  ) as NetworkMap
 }
 
 const InitNetworks = ({ children }: PropsWithChildren<{}>) => {
-  const [defaultNetworks, setNetworks] = useState<NetworkGroups>()
+  const [defaultNetworks, setNetworks] = useState<NetworkMap>()
   const { customLCDs } = useCustomLCDs()
   const { customChains } = useCustomChains()
 
@@ -198,7 +145,7 @@ const InitNetworks = ({ children }: PropsWithChildren<{}>) => {
   )
 
   const networks = useMemo(() => {
-    const merged: NetworkGroups = {
+    const merged: NetworkMap = {
       ...(defaultNetworks ?? {}),
       ...(normalizeCustomChains(customChains) ?? {}),
     }

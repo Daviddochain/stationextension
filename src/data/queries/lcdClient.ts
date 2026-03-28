@@ -7,8 +7,34 @@ const getSafeNetworks = (network?: Record<string, any>) => {
   return Object.fromEntries(
     Object.entries(network ?? {}).filter(([, chain]) => {
       return (
-        !!chain && typeof chain === "object" && !!chain.lcd && !!chain.chainID
+        !!chain &&
+        typeof chain === "object" &&
+        !!chain.lcd &&
+        !!chain.chainID &&
+        !!chain.prefix
       )
+    })
+  )
+}
+
+const dedupeNetworksByPrefix = (network?: Record<string, any>) => {
+  const seenPrefixes: Record<string, string> = {}
+
+  return Object.fromEntries(
+    Object.entries(network ?? {}).filter(([chainID, chain]) => {
+      const prefix = chain?.prefix
+
+      if (!prefix) return false
+
+      if (seenPrefixes[prefix]) {
+        console.warn(
+          `useInterchainLCDClient: dropping ${chainID} because prefix "${prefix}" is already used by ${seenPrefixes[prefix]}`
+        )
+        return false
+      }
+
+      seenPrefixes[prefix] = chainID
+      return true
     })
   )
 }
@@ -18,10 +44,15 @@ export const useInterchainLCDClient = () => {
 
   const lcdClient = useMemo(() => {
     const safeNetworks = getSafeNetworks(network)
-    if (Object.keys(safeNetworks).length === 0) return undefined
+    const dedupedNetworks = dedupeNetworksByPrefix(safeNetworks)
+
+    console.log("useInterchainLCDClient safeNetworks =", safeNetworks)
+    console.log("useInterchainLCDClient dedupedNetworks =", dedupedNetworks)
+
+    if (Object.keys(dedupedNetworks).length === 0) return undefined
 
     try {
-      return new InterchainLCDClient(safeNetworks)
+      return new InterchainLCDClient(dedupedNetworks)
     } catch (err) {
       console.error("Failed to create InterchainLCDClient:", err)
       return undefined

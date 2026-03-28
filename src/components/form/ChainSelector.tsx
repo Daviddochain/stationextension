@@ -3,6 +3,7 @@ import styles from "./ChainSelector.module.scss"
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown"
 import { useNetworks } from "app/InitNetworks"
 import ChainList from "./ChainList"
+import { InterchainNetwork } from "types/network"
 
 interface Props {
   chainsList: string[]
@@ -12,13 +13,25 @@ interface Props {
   noSearch?: boolean
 }
 
-const ChainSelector = ({ chainsList, onChange, value }: Props) => {
+const ChainSelector = ({
+  chainsList,
+  onChange,
+  value,
+  small,
+  noSearch,
+}: Props) => {
   const { networks } = useNetworks()
 
-  const allNetworks = useMemo(() => networks ?? {}, [networks])
+  const allNetworks = useMemo(
+    () => (networks ?? {}) as Record<string, InterchainNetwork>,
+    [networks]
+  )
 
   const list = useMemo(
-    () => chainsList.map((chainID) => allNetworks[chainID]).filter(Boolean),
+    () =>
+      chainsList
+        .map((chainID) => allNetworks[chainID])
+        .filter((network): network is InterchainNetwork => Boolean(network)),
     [allNetworks, chainsList]
   )
 
@@ -60,7 +73,13 @@ const ChainSelector = ({ chainsList, onChange, value }: Props) => {
       </button>
 
       {open && (
-        <ChainList list={list} onChange={handleSelection} value={value} />
+        <ChainList
+          list={list}
+          onChange={handleSelection}
+          value={value}
+          small={small}
+          noSearch={noSearch}
+        />
       )}
     </div>
   )

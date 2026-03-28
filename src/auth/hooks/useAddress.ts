@@ -10,6 +10,11 @@ import { InterchainNetwork } from "types/network"
 type WalletWords = Record<string, string | undefined>
 type NetworkMap = Record<string, InterchainNetwork>
 
+const getWalletAddress = (wallet: unknown): string | undefined => {
+  const value = (wallet as { address?: unknown } | undefined)?.address
+  return typeof value === "string" ? value : undefined
+}
+
 const isInterchainNetwork = (network: any): network is InterchainNetwork => {
   return Boolean(
     network &&
@@ -105,6 +110,25 @@ const buildInterchainAddresses = (
   )
 }
 
+const buildAddressFallback = (
+  wallet: unknown,
+  networks: NetworkMap
+): Record<string, string> | undefined => {
+  const walletAddress = getWalletAddress(wallet)
+
+  if (!walletAddress) {
+    return undefined
+  }
+
+  const addresses: Record<string, string> = {}
+
+  if (networks["columbus-5"]) {
+    addresses["columbus-5"] = walletAddress
+  }
+
+  return Object.keys(addresses).length ? addresses : undefined
+}
+
 const useAddress = () => {
   const { wallet } = useAuth()
   const runtimeNetworks = useNetwork()
@@ -112,31 +136,38 @@ const useAddress = () => {
 
   return useMemo(() => {
     const words = wallet?.words as WalletWords | undefined
-    if (!words) return undefined
-
     const mergedNetworks = mergeNetworks(runtimeNetworks, initNetworks)
-    const addresses = buildInterchainAddresses(words, mergedNetworks)
 
-    if (!addresses) return undefined
+    if (words) {
+      const addresses = buildInterchainAddresses(words, mergedNetworks)
 
-    if (addresses["columbus-5"]) {
-      return addresses["columbus-5"]
+      if (!addresses) return undefined
+
+      if (addresses["columbus-5"]) {
+        return addresses["columbus-5"]
+      }
+
+      const terraClassicLike = Object.values(mergedNetworks).find(
+        ({ prefix, coinType }) => prefix === "terra" && coinType === 330
+      )
+
+      if (terraClassicLike?.chainID && addresses[terraClassicLike.chainID]) {
+        return addresses[terraClassicLike.chainID]
+      }
+
+      try {
+        return words["330"]
+          ? addressFromWords(words["330"], "terra")
+          : undefined
+      } catch (error) {
+        console.error("useAddress: failed legacy fallback derivation", {
+          error,
+        })
+        return undefined
+      }
     }
 
-    const terraClassicLike = Object.values(mergedNetworks).find(
-      ({ prefix, coinType }) => prefix === "terra" && coinType === 330
-    )
-
-    if (terraClassicLike?.chainID && addresses[terraClassicLike.chainID]) {
-      return addresses[terraClassicLike.chainID]
-    }
-
-    try {
-      return words["330"] ? addressFromWords(words["330"], "terra") : undefined
-    } catch (error) {
-      console.error("useAddress: failed legacy fallback derivation", { error })
-      return undefined
-    }
+    return getWalletAddress(wallet)
   }, [wallet, runtimeNetworks, initNetworks])
 }
 
@@ -149,7 +180,11 @@ export const useAllInterchainAddresses = () => {
     const words = wallet?.words as WalletWords | undefined
     const mergedNetworks = mergeNetworks(runtimeNetworks, initNetworks)
 
-    return buildInterchainAddresses(words, mergedNetworks)
+    if (words) {
+      return buildInterchainAddresses(words, mergedNetworks)
+    }
+
+    return buildAddressFallback(wallet, mergedNetworks)
   }, [wallet, initNetworks, runtimeNetworks])
 }
 
@@ -161,7 +196,10 @@ export const useInterchainAddresses = () => {
   return useMemo(() => {
     const words = wallet?.words as WalletWords | undefined
     const mergedNetworks = mergeNetworks(runtimeNetworks, initNetworks)
-    const addresses = buildInterchainAddresses(words, mergedNetworks)
+
+    const addresses = words
+      ? buildInterchainAddresses(words, mergedNetworks)
+      : buildAddressFallback(wallet, mergedNetworks)
 
     console.log("useInterchainAddresses derived", {
       chainCount: Object.keys(addresses ?? {}).length,

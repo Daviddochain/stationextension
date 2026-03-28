@@ -53,7 +53,7 @@ const useAuth = () => {
 
   const connect = useCallback(
     (name: string) => {
-      const storedWallet = getStoredWallet(name)
+      const storedWallet = getStoredWallet(name) as any
 
       if ("address" in storedWallet) {
         const { address, lock } = storedWallet
@@ -64,30 +64,32 @@ const useAuth = () => {
         if (lock) throw new Error("Wallet is locked")
 
         const nextWallet = is.multisig(storedWallet)
-          ? { name, words, multisig: true as const }
-          : { name, words }
+          ? { name, words, multisig: true as const, address }
+          : { name, words, address }
 
         storeWallet(nextWallet)
         setWallet(nextWallet as any)
 
-        void syncExtensionWallet({
-          ...nextWallet,
-          address: addressFromWords(words["330"], "terra"),
-        })
+        void syncExtensionWallet(nextWallet)
       } else {
         const { lock } = storedWallet
         if (lock) throw new Error("Wallet is locked")
 
-        storeWallet(storedWallet)
-        setWallet(storedWallet as any)
+        const nextWallet =
+          "words" in storedWallet
+            ? {
+                ...storedWallet,
+                address: addressFromWords(storedWallet.words["330"], "terra"),
+              }
+            : {
+                ...storedWallet,
+                address: storedWallet.address,
+              }
 
-        void syncExtensionWallet({
-          ...storedWallet,
-          address:
-            "words" in storedWallet
-              ? addressFromWords(storedWallet.words["330"], "terra")
-              : (storedWallet as any).address,
-        })
+        storeWallet(nextWallet)
+        setWallet(nextWallet as any)
+
+        void syncExtensionWallet(nextWallet)
       }
     },
     [setWallet, syncExtensionWallet]
@@ -101,6 +103,8 @@ const useAuth = () => {
       bluetooth = false,
       name = "Ledger"
     ) => {
+      const address = addressFromWords(words["330"], "terra")
+
       const nextWallet = {
         words,
         pubkey,
@@ -109,16 +113,14 @@ const useAuth = () => {
         bluetooth,
         lock: false as const,
         name,
+        address,
       }
 
       addWallet(nextWallet)
       storeWallet(nextWallet)
       setWallet(nextWallet as any)
 
-      void syncExtensionWallet({
-        ...nextWallet,
-        address: addressFromWords(words["330"], "terra"),
-      })
+      void syncExtensionWallet(nextWallet)
     },
     [setWallet, syncExtensionWallet]
   )
