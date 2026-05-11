@@ -16,9 +16,12 @@ if (shouldInjectProvider()) {
  */
 function checkWebpage() {
   browser.storage.local.get(["blacklist"]).then(async ({ blacklist }) => {
+    const BLACKLIST_URL = "https://do-wallet.com/blacklist.json"
     const WARNING_PAGE = `https://scam-warning.terraclassic.community/`
 
     function checkAndRedirect(list) {
+      if (!Array.isArray(list)) return
+
       // if user is visiting a blacklisted domain or subdomain
       if (
         list.some(
@@ -40,16 +43,32 @@ function checkWebpage() {
 
     // update every 10min
     if (!blacklist || blacklist.updatedAt < Date.now() - 1000 * 60 * 10) {
-      const BLACKLIST_URL = "https://assets.terraclassic.community/blacklist.json"
-      const response = await fetch(BLACKLIST_URL)
-      const list = await response.json()
-      checkAndRedirect(list)
+      const list = await fetchBlacklist(BLACKLIST_URL)
+
+      if (list) {
+        checkAndRedirect(list)
+      }
 
       browser.storage.local.set({
-        blacklist: { list, updatedAt: Date.now() },
+        blacklist: {
+          list: list || blacklist?.list || [],
+          updatedAt: Date.now()
+        }
       })
     }
   })
+}
+
+async function fetchBlacklist(url) {
+  try {
+    const response = await fetch(url, { cache: "no-store" })
+    if (!response.ok) return null
+
+    const list = await response.json()
+    return Array.isArray(list) ? list : null
+  } catch (e) {
+    return null
+  }
 }
 
 /**
@@ -88,7 +107,7 @@ async function setupStationProvider() {
           uuid: event.data.uuid,
           sender: "terra-classic-station",
           data,
-          success,
+          success
         },
         event.origin
       )
@@ -148,7 +167,7 @@ async function setupStationProvider() {
           browser.storage.local.set({
             [key]: data.purgeQueue
               ? [{ ...data, origin, uuid }]
-              : [...list, { ...data, origin, uuid }],
+              : [...list, { ...data, origin, uuid }]
           })
 
         openPopup()
@@ -205,7 +224,7 @@ async function setupStationProvider() {
 
         const handleGetConnect = ({
           connect = { request: [], allowed: [] },
-          wallet = {},
+          wallet = {}
         }) => {
           // 1. If the address is authorized and the wallet exists
           //    - send back the response and close the popup.
@@ -215,7 +234,7 @@ async function setupStationProvider() {
           const walletExists = wallet.address
           const alreadyRequested = [
             ...connect.request,
-            ...connect.allowed,
+            ...connect.allowed
           ].includes(origin)
 
           if (isAllowed && walletExists) {
@@ -225,7 +244,7 @@ async function setupStationProvider() {
           } else {
             !alreadyRequested &&
               browser.storage.local.set({
-                connect: { ...connect, request: [origin, ...connect.request] },
+                connect: { ...connect, request: [origin, ...connect.request] }
               })
 
             openPopup()
@@ -262,7 +281,7 @@ async function setupStationProvider() {
 
         const handleGetPubkey = ({
           connect = { request: [], allowed: [] },
-          wallet = {},
+          wallet = {}
         }) => {
           // 1. If the address is authorized and the wallet exists
           //    - send back the response and close the popup.
@@ -277,7 +296,7 @@ async function setupStationProvider() {
             browser.storage.onChanged.removeListener(handleChangePubkey)
           } else {
             browser.storage.local.set({
-              pubkey: origin,
+              pubkey: origin
             })
 
             openPopup()
@@ -315,7 +334,7 @@ function setupEvents() {
             Object.values(changes.wallet.newValue.pubkey || {}).join(","))
       ) {
         const event = new CustomEvent("terra_classic_station_wallet_change", {
-          detail: changes.wallet.newValue,
+          detail: changes.wallet.newValue
         })
         window.dispatchEvent(event)
 
@@ -326,7 +345,7 @@ function setupEvents() {
       }
       if (changes.theme) {
         const event = new CustomEvent("terra_classic_station_theme_change", {
-          detail: changes.theme.newValue,
+          detail: changes.theme.newValue
         })
         window.dispatchEvent(event)
       }
@@ -335,7 +354,7 @@ function setupEvents() {
         changes.networkName.oldValue !== changes.networkName.newValue
       ) {
         const event = new CustomEvent("terra_classic_station_network_change", {
-          detail: changes.networks.newValue,
+          detail: changes.networks.newValue
         })
 
         window.dispatchEvent(event)
@@ -442,11 +461,11 @@ function documentElementCheck() {
 async function setupStreams() {
   const pageStream = new PostMessageStream({
     name: "terra-classic-station:content",
-    target: "terra-classic-station:inpage",
+    target: "terra-classic-station:inpage"
   })
 
   const extensionPort = browser.runtime.connect({
-    name: "TerraClassicStationExtension",
+    name: "TerraClassicStationExtension"
   })
 
   const extensionStream = new PortStream(extensionPort)
@@ -477,4 +496,3 @@ function openPopup() {
 function closePopup() {
   browser.runtime.sendMessage("CLOSE_POPUP")
 }
-
